@@ -1,0 +1,8 @@
+.env
+.dev.vars
+node_modules/
+worker/node_modules/
+worker/.wrangler/
+Niepotrzebne/.wrangler-state/
+Niepotrzebne/tests/out/
+.DS_Store
