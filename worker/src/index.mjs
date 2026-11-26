@@ -1,8 +1,8 @@
 // Battle with Ideas API: Haiku turns typed ideas into recipes, the world Idea Book lives in D1, the key never leaves the Worker.
 
 import Anthropic from '@anthropic-ai/sdk';
-import { IDEA_SCHEMA, PAINT_SCHEMA, HEAD_SCHEMA, sanitizeIdea, sanitizePaint, sanitizeHead, normText } from '../../src/shared/recipe.js';
-import { IDEA_SYSTEM, PAINT_SYSTEM, HEAD_SYSTEM } from './prompt.mjs';
+import { IDEA_SCHEMA, PAINT_SCHEMA, HEAD_SCHEMA, OUTFIT_SCHEMA, sanitizeIdea, sanitizePaint, sanitizeHead, sanitizeOutfitLook, normText } from '../../src/shared/recipe.js';
+import { IDEA_SYSTEM, PAINT_SYSTEM, HEAD_SYSTEM, OUTFIT_SYSTEM } from './prompt.mjs';
 
 const MODEL = 'claude-haiku-5-5';
 const PRICE_IN = 0.10, PRICE_OUT = 0.50, PRICE_CACHE = 0.01;
@@ -11,6 +11,7 @@ const MODES = {
   idea: { system: IDEA_SYSTEM, schema: IDEA_SCHEMA, clean: sanitizeIdea, max: 3500 },
   paint: { system: PAINT_SYSTEM, schema: PAINT_SCHEMA, clean: sanitizePaint, max: 4000 },
   head: { system: HEAD_SYSTEM, schema: HEAD_SCHEMA, clean: sanitizeHead, max: 2000 },
+  outfit: { system: OUTFIT_SYSTEM, schema: OUTFIT_SCHEMA, clean: sanitizeOutfitLook, max: 6000 },
 };
 
 const SCHEMA_SQL = [
@@ -53,7 +54,7 @@ async function haiku(env, mode, text) {
   let last;
   for (let round = 0; round < 2; round++) {
     for (let i = 0; i < keys.length; i++) {
-      const client = new Anthropic({ apiKey: keys[i], maxRetries: 1, timeout: 25000 });
+      const client = new Anthropic({ apiKey: keys[i], maxRetries: 1, timeout: 40000 });
       try {
         const res = await client.messages.create({
           model: MODEL,
@@ -116,8 +117,17 @@ async function make(req, env) {
   if (mine && mine.fresh >= parseInt(env.FRESH_PER_IP || '150', 10) && !p.free) return json(req, { error: 'You invented a lot today! New ideas pause until tomorrow, the Book still works.', code: 'ip' }, 429);
   if (mine && mine.calls >= parseInt(env.CALLS_PER_IP || '1500', 10)) return json(req, { error: 'Too many requests today.', code: 'ip' }, 429);
   let out;
-  try { out = await haiku(env, mode, text); }
-  catch (e) { return json(req, { error: e.code ? e.message : 'The Idea Engine hiccuped. Try again.', code: e.code || 'ai' }, 502); }
+  try {
+    out = await haiku(env, mode, text);
+    if (mode === 'idea' && out.raw && out.raw.kind === 'outfit') {
+      const o = await haiku(env, 'outfit', text);
+      out.raw.outfit = o.raw.outfit;
+      if (Array.isArray(o.raw.parts) && o.raw.parts.length) out.raw.parts = o.raw.parts;
+      if (o.raw.blurb) out.raw.blurb = o.raw.blurb;
+      out.usd += o.usd;
+    }
+  }
+  catch (e) { console.error('make failed', mode, e.status || '', String(e.message || e).slice(0, 600)); return json(req, { error: e.code ? e.message : 'The Idea Engine hiccuped. Try again.', code: e.code || 'ai' }, 502); }
   const rec = MODES[mode].clean(out.raw, text);
   await env.DB.batch([
     env.DB.prepare('INSERT INTO spend (day, usd, calls) VALUES (?, ?, 1) ON CONFLICT(day) DO UPDATE SET usd = usd + excluded.usd, calls = calls + 1').bind(d, out.usd),

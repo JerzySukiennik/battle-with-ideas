@@ -17,6 +17,7 @@ const mk = async (name) => {
 const ok = (c, m) => console.log((c ? 'PASS ' : 'FAIL ') + m);
 const mode = process.argv[2] || 'ffa';
 const A = await mk('Ala'), B = await mk('Bob');
+await A.evaluate(async () => { const r = await BWI.app.api.resolve('skafander', 'outfit', 'Ala'); BWI.game.wearOutfit(r.rec.outfit, r.rec.name, false); });
 const code = await A.evaluate(async (mode) => { await BWI.app.createRoom(mode, true); return BWI.app.session.code; }, mode);
 ok(/^[A-Z]{4}$/.test(code), 'room created ' + code);
 await B.evaluate(async (c) => { await BWI.app.joinRoom(c); }, code);
@@ -34,6 +35,12 @@ await A.evaluate(async () => { BWI.game.cam.pitch = -0.3; await BWI.game.cast('r
 await A.waitForTimeout(2500);
 const seenB = await B.evaluate(() => [...BWI.game.ideas.map.values()].map((i) => `${i.rec.name}:${i.owner.slice(0, 4)}:${i.isOwner}`));
 ok(seenB.some((s) => s.startsWith('Rekin')), 'B sees A idea: ' + seenB.join(' | '));
+await B.evaluate(async () => { BWI.game.me.wena = 100; await BWI.game.cast('chcę być rycerzem'); });
+await A.waitForTimeout(2500);
+const fits = (P) => P.evaluate(() => [...BWI.game.players.values()].filter((p) => p.remote).map((p) => `${p.name}:${p.puppet.pieces.length}:${!!(p.outfit && p.outfit.head)}`));
+const fitB = await fits(B), fitA = await fits(A);
+ok(fitB.some((s) => /^Ala:[1-9]\d*:true$/.test(s)), 'B sees the spacesuit A put on before joining: ' + fitB.join(','));
+ok(fitA.some((s) => /^Bob:[1-9]\d*:/.test(s)), 'A sees the armour B cast in the match: ' + fitA.join(','));
 await B.screenshot({ path: 'Niepotrzebne/tests/out/mp-b.png' });
 await A.screenshot({ path: 'Niepotrzebne/tests/out/mp-a.png' });
 await A.evaluate(() => BWI.app.toMenu()); await B.evaluate(() => BWI.app.toMenu());

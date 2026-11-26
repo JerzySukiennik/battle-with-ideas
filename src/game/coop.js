@@ -109,7 +109,7 @@ export class Coop {
         if (g.mode !== this) return;
         this.sparkId = g.ideas.newId('spark');
         const rec = { ...SPARK, hp: Math.round(SPARK.hp * this.scale()) };
-        g.emit({ k: 'spawn', id: this.sparkId, owner: 'spark', rec, at: [0, 0, 0], aim: [0, 0, 0], yaw: 0, seed: 1, uses: 0 });
+        g.emit({ k: 'spawn', id: this.sparkId, owner: 'spark', rec, at: [0, g.island.heightAt(0, 0), 0], aim: [0, 0, 0], yaw: 0, seed: 1, uses: 0 });
         g.emit({ k: 'coop', st: 'break', wave: 0, t: this.now() + 6000, line: 'So you found the last Spark. How... cute. Protect it, if you can.' });
       }, g.net ? 1600 : 100);
     }
@@ -192,7 +192,7 @@ export class Coop {
     else rec = NUDA[key];
     const a = Math.random() * Math.PI * 2;
     const R = g.island.radiusAt(a) - 2.5;
-    const at = new THREE.Vector3(Math.cos(a) * R, 0, Math.sin(a) * R);
+    const at = new THREE.Vector3(Math.cos(a) * R, g.island.heightAt(Math.cos(a) * R, Math.sin(a) * R), Math.sin(a) * R);
     const id = g.ideas.newId('nuda');
     if (rec.boss) this.bossId = id;
     g.emit({ k: 'spawn', id, owner: 'nuda', rec, at: at.toArray(), aim: [0, 0, 0], yaw: Math.atan2(-at.x, -at.z), seed: (Math.random() * 1e6) | 0, uses: 0 });

@@ -165,12 +165,15 @@ body.hud-comic .logo { color: #ffd23f; -webkit-text-stroke: 2.5px #111; text-sha
 .card-i canvas { width: 100%; aspect-ratio: 1; background: #f1efe8; border-radius: 10px; }
 .card-i b { font-weight: normal; font-size: 1.05em; line-height: 1.1; }
 .card-i small { color: #66655f; font-size: .75em; }
-.story { position: absolute; inset: 0; display: grid; align-items: end; justify-items: center; padding-bottom: 12vh; pointer-events: none; }
-.story .line { font-size: 34px; text-align: center; max-width: 900px; text-shadow: 0 2px 0 #fff, 0 0 26px rgba(255, 255, 255, .95); opacity: 0; transition: opacity .8s; }
-.story .line.on { opacity: 1; }
-.story .skip { position: absolute; right: 22px; bottom: 22px; pointer-events: auto; }
-.story .title { position: absolute; top: 30%; font-size: 104px; text-shadow: 0 3px 0 #fff, 0 0 40px rgba(255, 255, 255, .95), 0 0 80px rgba(255, 255, 255, .8); opacity: 0; transition: opacity 1s, transform 1.2s; transform: scale(.9); }
-.story .title.on { opacity: 1; transform: none; }
+.story { position: absolute; inset: 0; pointer-events: none; z-index: 40; }
+.story .line { position: absolute; left: 50%; bottom: 7vh; transform: translate(-50%, 8px); max-width: min(900px, 86vw); padding: 12px 26px 14px; background: var(--panel); border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow); font-size: clamp(20px, 2.4vw, 32px); line-height: 1.25; text-align: center; opacity: 0; transition: opacity .28s, transform .28s; }
+.story .line.on { opacity: 1; transform: translate(-50%, 0); }
+.story .skip { position: absolute; right: 22px; top: 20px; pointer-events: auto; }
+.story .title { position: absolute; left: 50%; top: 14%; transform: translate(-50%, 0) scale(.92); display: grid; justify-items: center; gap: 6px; padding: 18px 34px 20px; background: var(--panel); border: var(--border); border-radius: var(--radius); box-shadow: var(--shadow); opacity: 0; transition: opacity .9s, transform 1.1s cubic-bezier(.2, 1.4, .4, 1); }
+.story .title.on { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.story .title b { font-weight: normal; font-size: clamp(44px, 6vw, 88px); line-height: 1; }
+.story .title span { font-size: clamp(18px, 1.8vw, 26px); color: #55544f; }
+body:has(.story) .music { display: none; }
 @media (max-width: 900px) { .menu { grid-template-columns: 1fr; background: rgba(244, 242, 236, .9); } .h-left { width: 180px; } .h-help { display: none; } }
 
 .music { position: fixed; right: 16px; bottom: 16px; z-index: 30; display: grid; gap: 6px; justify-items: end; font-size: 14px; color: #55544f; transition: opacity .4s; }
@@ -179,3 +182,5 @@ body.hud-comic .logo { color: #ffd23f; -webkit-text-stroke: 2.5px #111; text-sha
 .music.file .yt { display: none; }
 .music span { padding: 2px 10px; background: var(--panel); border: var(--border); border-width: 1.5px; border-radius: 999px; }
 input[type=range] { accent-color: #25252b; width: 100%; }
+button.link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; opacity: 0.8; }
+button.link:hover { opacity: 1; }

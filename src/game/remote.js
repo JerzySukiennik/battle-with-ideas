@@ -57,6 +57,8 @@ export class RemotePlayer {
 
   setHead(rec) { this.head = rec; this.puppet.setHead(rec); }
 
+  wear(outfit) { this.outfit = outfit && outfit.pieces ? outfit : null; this.puppet.setOutfit(this.outfit); }
+
   pos(out = new THREE.Vector3()) { return out.copy(this.center); }
   handPos(out = new THREE.Vector3()) { return this.puppet.handPos('R', out); }
 
@@ -99,7 +101,7 @@ export class RemotePlayer {
     this.puppet.setGhost(this.ghost);
     this.puppet.headSlot.scale.setScalar(this.bighead ? 2.3 : 1);
     for (const n of PART_NAMES) this.puppet.meshes[n].scale.setScalar(this.scale);
-    this.puppet.mat.color.set(this.frozen ? '#9fd8ff' : this.color);
+    this.puppet.mat.color.set(this.frozen ? '#9fd8ff' : this.puppet.bodyColor(this.color, !!(this.game.mode && this.game.mode.teams)));
     this.puppet.tick(dt, Math.hypot(this.vel.x, this.vel.z));
     if (this.held) this.game.weapons.tick(this, dt);
   }

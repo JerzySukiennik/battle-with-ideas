@@ -1,9 +1,9 @@
 // Battle with Ideas: the idea recipe format shared by the game, the Worker and the seed script (schemas, sanitizer, costs).
 
-export const SHAPES = ['box', 'sphere', 'dome', 'cylinder', 'cone', 'capsule', 'torus', 'pyramid', 'wedge', 'star'];
+export const SHAPES = ['box', 'sphere', 'dome', 'cylinder', 'frustum', 'cone', 'capsule', 'torus', 'pyramid', 'wedge', 'teardrop', 'blob', 'star', 'heart'];
 export const MATS = ['matte', 'shiny', 'metal', 'glow', 'glass'];
 export const ANIMS = ['none', 'spin', 'spin_fast', 'bob', 'flap', 'wiggle', 'pulse', 'swing', 'wheel', 'orbit'];
-export const KINDS = ['creature', 'vehicle', 'weapon', 'structure', 'disaster', 'projectile', 'spell', 'trap'];
+export const KINDS = ['creature', 'vehicle', 'weapon', 'structure', 'disaster', 'projectile', 'spell', 'trap', 'outfit'];
 export const MOVES = ['none', 'walk', 'hop', 'fly', 'swim', 'roll', 'slither', 'vortex', 'follow_owner', 'orbit_owner', 'rain', 'burrow', 'projectile', 'teleport', 'dash'];
 export const TARGETS = ['nearest_enemy', 'aim_point', 'random', 'owner'];
 export const ATTACKS = ['contact', 'bite', 'slam', 'explode', 'shoot', 'lob', 'beam', 'shockwave', 'suck', 'blow', 'freeze', 'burn', 'zap', 'lightning', 'meteor', 'launch', 'stun', 'shrink', 'grow', 'sticky', 'heal_owner', 'shield_owner', 'spawn'];
@@ -16,18 +16,49 @@ export const PARTICLES = ['none', 'fire', 'smoke', 'sparkle', 'bubbles', 'leaves
 export const SOUNDS = ['none', 'roar', 'growl', 'bark', 'meow', 'chirp', 'buzz', 'moo', 'quack', 'oink', 'neigh', 'hiss', 'engine', 'jet', 'helicopter', 'whoosh', 'wind', 'thunder', 'explosion', 'splash', 'zap', 'laser', 'magic', 'bonk', 'squeak', 'crash', 'bell', 'horn', 'fart', 'pop', 'crunch', 'sizzle', 'rumble', 'boing', 'slurp', 'chomp', 'whistle', 'gunshot', 'sword', 'ghost'];
 export const PATTERNS = ['noise', 'stripes', 'checker', 'spots', 'cracks', 'waves', 'grass', 'tiles', 'swirl', 'hex', 'dots', 'marble'];
 export const SURFACES = ['normal', 'ice', 'lava', 'bouncy', 'mud', 'water', 'sand', 'conveyor', 'toxic', 'lowgrav', 'speed', 'cloud'];
+export const BONES = ['head', 'chest', 'pelvis', 'upper_arm', 'forearm', 'thigh', 'shin'];
+export const BUFFS = ['armor', 'heavy', 'speed', 'jump', 'lowgrav', 'glide', 'fly', 'regen', 'fireproof', 'iceproof'];
+const BUFF_RANGE = { armor: [0.1, 0.5, 0.3], heavy: [0.2, 0.7, 0.4], speed: [1.05, 1.4, 1.2], jump: [1.1, 1.7, 1.35], lowgrav: [0.45, 0.9, 0.7], glide: [0.3, 1, 0.6], fly: [0.4, 1, 0.7], regen: [0.5, 3, 1.5], fireproof: [1, 1, 1], iceproof: [1, 1, 1] };
 
 const PART = {
   type: 'object', additionalProperties: false,
   required: ['s', 'p', 'd', 'r', 'c', 'm', 'a'],
   properties: {
-    s: { type: 'string', enum: SHAPES, description: 'primitive shape; dome = half sphere, wedge = triangular prism (ramps, fins, beaks), star = flat 5-point star' },
+    s: { type: 'string', enum: SHAPES, description: 'primitive (all edges come out softly rounded): box, sphere (any ellipsoid), dome (half sphere), cylinder, frustum (cylinder narrower at the top: buckets, trunks, legs, necks), cone (pointy: horns, teeth, noses, roofs), capsule (limbs, bodies, fingers), torus (rings, wheels rims, donuts), pyramid, wedge (fins, beaks, ramps, wings), teardrop (flames, drops, tails, leaves, fish bodies), blob (lumpy: clouds, rocks, bushes, fur tufts, smoke), star, heart (flat with thickness)' },
     p: { type: 'array', items: { type: 'number' }, description: 'center [x,y,z] in model units' },
     d: { type: 'array', items: { type: 'number' }, description: 'full size [width x, height y, depth z] in model units' },
     r: { type: 'array', items: { type: 'number' }, description: 'rotation [x,y,z] in degrees' },
     c: { type: 'string', description: 'color #rrggbb, bold and saturated' },
     m: { type: 'string', enum: MATS },
     a: { type: 'string', enum: ANIMS, description: 'part animation: spin (around its y), spin_fast, bob, flap (wings), wiggle, pulse, swing (legs, tails, arms), wheel (rolls with movement), orbit (circles the model center)' },
+  },
+};
+
+const PIECE = {
+  type: 'object', additionalProperties: false,
+  required: ['b', 's', 'p', 'd', 'r', 'c', 'm', 'a'],
+  properties: {
+    b: { type: 'string', enum: BONES, description: 'body part the piece is strapped to and moves with (forearm also carries the hand, shin also carries the foot)' },
+    s: PART.properties.s,
+    p: { type: 'array', items: { type: 'number' }, description: 'center [x,y,z] in METRES on the mannequin (feet at y=0, facing +z)' },
+    d: { type: 'array', items: { type: 'number' }, description: 'full size [x,y,z] in metres' },
+    r: PART.properties.r,
+    c: PART.properties.c,
+    m: PART.properties.m,
+    a: PART.properties.a,
+  },
+};
+
+const OUTFIT = {
+  type: 'object', additionalProperties: false,
+  required: ['suit', 'trim', 'mat', 'head', 'pieces', 'buffs'],
+  properties: {
+    suit: { type: 'string', description: 'colour #rrggbb of the whole body: the suit, skin, fur or clothes' },
+    trim: { type: 'string', description: 'colour #rrggbb of the hands and feet: gloves, boots, paws' },
+    mat: { type: 'string', enum: MATS, description: 'material of the body suit' },
+    head: { anyOf: [{ type: 'array', items: PART, description: '6-14 primitives in model units: the costume head that replaces the player head (helmet with visor, mask, animal head)' }, { type: 'null' }] },
+    pieces: { type: 'array', items: PIECE, description: '8-22 pieces worn on the body in metres' },
+    buffs: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'amt'], properties: { type: { type: 'string', enum: BUFFS }, amt: { type: 'number', description: 'armor 0.1-0.5 less damage, heavy 0.2-0.7 less knockback, speed 1.05-1.4, jump 1.1-1.7, lowgrav 0.45-0.9 gravity, glide 0.3-1, fly 0.4-1 thrust, regen 0.5-3 hp per second, fireproof and iceproof 1' } } }, description: '0-2 perks while worn' },
   },
 };
 
@@ -70,7 +101,7 @@ export const IDEA_SCHEMA = {
     kind: { type: 'string', enum: KINDS },
     power: { type: 'integer', description: '1-10, how game-changing it is. A banana is 1, a shark 4, a tank 7, a black hole 10' },
     size: { type: 'number', description: 'real size of the longest side in meters (player is 1.7 m)' },
-    parts: { type: 'array', items: PART, description: '4-16 primitives forming a recognisable, characterful sculpture' },
+    parts: { type: 'array', items: PART, description: '10-26 primitives forming a detailed, recognisable, characterful sculpture' },
     particles: { type: 'string', enum: PARTICLES },
     move: {
       type: 'object', additionalProperties: false, required: ['type', 'speed', 'target'],
@@ -87,6 +118,19 @@ export const IDEA_SCHEMA = {
   },
 };
 
+export const OUTFIT_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['key', 'name', 'en', 'blurb', 'parts', 'outfit'],
+  properties: {
+    key: IDEA_SCHEMA.properties.key,
+    name: IDEA_SCHEMA.properties.name,
+    en: IDEA_SCHEMA.properties.en,
+    blurb: IDEA_SCHEMA.properties.blurb,
+    parts: { type: 'array', items: PART, description: '6-12 primitives: a small showcase of the costume for the Book icon' },
+    outfit: OUTFIT,
+  },
+};
+
 export const HEAD_SCHEMA = {
   type: 'object', additionalProperties: false,
   required: ['key', 'name', 'en', 'parts'],
@@ -94,7 +138,7 @@ export const HEAD_SCHEMA = {
     key: IDEA_SCHEMA.properties.key,
     name: IDEA_SCHEMA.properties.name,
     en: IDEA_SCHEMA.properties.en,
-    parts: { type: 'array', items: PART, description: '3-14 primitives forming the head object' },
+    parts: { type: 'array', items: PART, description: '6-18 primitives forming the head object' },
   },
 };
 
@@ -137,7 +181,7 @@ export function normText(t) {
   return String(t || '').toLowerCase().replace(/ł/g, 'l').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
 }
 
-function parts(list, max = 16) {
+function parts(list, max = 30) {
   const out = [];
   for (const p of Array.isArray(list) ? list : []) {
     if (out.length >= max) break;
@@ -149,7 +193,30 @@ function parts(list, max = 16) {
   return out;
 }
 
-const KIND_SIZE = { creature: [0.2, 12], vehicle: [1.2, 12], weapon: [0.3, 3], structure: [0.6, 14], disaster: [2, 18], projectile: [0.2, 4], spell: [0.3, 3], trap: [0.3, 5] };
+const KIND_SIZE = { creature: [0.2, 12], vehicle: [1.2, 12], weapon: [0.3, 3], structure: [0.6, 14], disaster: [2, 18], projectile: [0.2, 4], spell: [0.3, 3], trap: [0.3, 5], outfit: [0.5, 2.5] };
+
+export function sanitizeOutfit(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const pieces = [];
+  for (const p of Array.isArray(raw.pieces) ? raw.pieces : []) {
+    if (pieces.length >= 26) break;
+    if (!p || typeof p !== 'object') continue;
+    pieces.push({ b: pick(p.b, BONES, 'chest'), s: pick(p.s, SHAPES, 'box'), p: vec(p.p, -1.2, 2.8, [0, 1.3, 0]), d: vec(p.d, 0.01, 1.8, [0.2, 0.2, 0.2]), r: vec(p.r, -360, 360, [0, 0, 0]), c: hex(p.c, '#9a9a9a'), m: pick(p.m, MATS, 'matte'), a: pick(p.a, ANIMS, 'none') });
+  }
+  const buffs = [];
+  for (const b of (Array.isArray(raw.buffs) ? raw.buffs : []).slice(0, 2)) {
+    if (!b || !BUFFS.includes(b.type) || buffs.some((x) => x.type === b.type)) continue;
+    const [lo, hi, d] = BUFF_RANGE[b.type];
+    buffs.push({ type: b.type, amt: num(b.amt, lo, hi, d) });
+  }
+  const head = Array.isArray(raw.head) && raw.head.length ? parts(raw.head, 20) : null;
+  return { suit: hex(raw.suit, '#e8e4da'), trim: hex(raw.trim, '#f7f5ef'), mat: pick(raw.mat, MATS, 'matte'), head, pieces, buffs };
+}
+
+export function sanitizeOutfitLook(raw, text = '') {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  return { v: 1, key: slug(r.key || r.en || text), name: str(r.name, 28, str(text, 28, 'Outfit')), en: str(r.en, 28, 'Outfit'), blurb: str(r.blurb, 90, ''), kind: 'outfit', parts: parts(r.parts, 14), outfit: sanitizeOutfit(r.outfit) || { suit: '#e8e4da', trim: '#f7f5ef', mat: 'matte', head: null, pieces: [], buffs: [] } };
+}
 
 export function sanitizeIdea(raw, text = '') {
   const r = raw && typeof raw === 'object' ? raw : {};
@@ -171,7 +238,7 @@ export function sanitizeIdea(raw, text = '') {
     life: num(r.life, 0, 60, 0),
     count: int(r.count, 1, 12, 1),
     attacks: [],
-    vehicle: null, weapon: null, spell: null,
+    vehicle: null, weapon: null, spell: null, outfit: null,
     sound: pick(r.sound, SOUNDS, 'none'),
   };
   const dmgCap = 6 + power * 7, radCap = 2 + power * 1.2, kbCap = 4 + power * 2.2;
@@ -210,6 +277,10 @@ export function sanitizeIdea(raw, text = '') {
   if (kind === 'vehicle' && !out.vehicle) out.vehicle = { type: 'car', speed: 18, fly: false, seats: 2, gun: false };
   if (kind === 'weapon' && !out.weapon) out.weapon = { type: 'melee', dmg: 10, rate: 0.6, range: 2.5, kb: 6, proj: 'none', proj_color: '#ffd23f', proj_size: 0.2, effect: 'none' };
   if (kind === 'spell' && !out.spell) out.spell = { effects: [{ type: 'confetti', who: 'all', amt: 1, dur: 3 }] };
+  if (kind === 'outfit') {
+    out.outfit = sanitizeOutfit(r.outfit) || { suit: out.parts[0].c, trim: '#f7f5ef', mat: out.parts[0].m === 'glow' ? 'shiny' : out.parts[0].m, head: null, pieces: [], buffs: [] };
+    out.attacks = []; out.count = 1; out.life = 0; out.move = { type: 'none', speed: 0, target: 'owner' };
+  }
   if (kind === 'disaster') out.life = num(out.life || 10, 3, 4 + power * 1.3, 10);
   if (kind === 'projectile') { out.life = num(out.life || 5, 1, 8, 5); if (out.move.type === 'none') out.move.type = 'projectile'; out.move.speed = Math.max(out.move.speed, 10); }
   if (kind === 'weapon' || kind === 'structure' || kind === 'vehicle') out.life = 0;
@@ -221,7 +292,7 @@ export function sanitizeIdea(raw, text = '') {
 
 export function sanitizeHead(raw, text = '') {
   const r = raw && typeof raw === 'object' ? raw : {};
-  return { v: 1, key: slug(r.key || r.en || text), name: str(r.name, 28, str(text, 28, 'Head')), en: str(r.en, 28, 'Head'), parts: parts(r.parts, 14) };
+  return { v: 1, key: slug(r.key || r.en || text), name: str(r.name, 28, str(text, 28, 'Head')), en: str(r.en, 28, 'Head'), parts: parts(r.parts, 20) };
 }
 
 export function sanitizePaint(raw, text = '') {
@@ -230,9 +301,9 @@ export function sanitizePaint(raw, text = '') {
   const props = [];
   for (const p of (Array.isArray(r.props) ? r.props : []).slice(0, 3)) {
     if (!p || typeof p !== 'object') continue;
-    props.push({ parts: parts(p.parts, 10), size: num(p.size, 0.3, 9, 2), count: int(p.count, 0, 36, 12), collide: !!p.collide });
+    props.push({ parts: parts(p.parts, 14), size: num(p.size, 0.3, 9, 2), count: int(p.count, 0, 36, 12), collide: !!p.collide });
   }
-  const lm = r.landmark && typeof r.landmark === 'object' ? { parts: parts(r.landmark.parts, 16), size: num(r.landmark.size, 3, 22, 10) } : null;
+  const lm = r.landmark && typeof r.landmark === 'object' ? { parts: parts(r.landmark.parts, 26), size: num(r.landmark.size, 3, 22, 10) } : null;
   return {
     v: 1, key: slug(r.key || r.en || text), name: str(r.name, 28, str(text, 28, 'World')), en: str(r.en, 28, 'World'), blurb: str(r.blurb, 90, ''),
     ground: [hex(g[0], '#c8e6a0'), hex(g[1], '#9fd17a')], pattern: pick(r.pattern, PATTERNS, 'noise'), surface: pick(r.surface, SURFACES, 'normal'),
@@ -247,6 +318,7 @@ export function ideaCost(rec, uses = 0) {
   if (rec.kind === 'weapon') c += 8;
   if (rec.kind === 'structure') c -= 6;
   if (rec.kind === 'spell') c -= 2;
+  if (rec.kind === 'outfit') c = 10 + (rec.outfit ? rec.outfit.buffs.length * 14 : 0);
   c = Math.round(c * (1 + 0.45 * uses));
   return Math.max(6, Math.min(100, c));
 }

@@ -1,10 +1,11 @@
 // Battle with Ideas: turns typed text into recipes (memory and local cache, the shipped Book, the Haiku Worker, fuzzy fallback).
 
 import { CFG } from '../config.js';
-import { normText, sanitizeIdea, sanitizePaint, sanitizeHead } from '../shared/recipe.js';
+import { normText, sanitizeIdea, sanitizePaint, sanitizeHead, sanitizeOutfitLook } from '../shared/recipe.js';
 
-const LS = 'bwi.cache.v1';
-const SAN = { idea: sanitizeIdea, paint: sanitizePaint, head: sanitizeHead };
+const LS = 'bwi.cache.v2';
+const SAN = { idea: sanitizeIdea, paint: sanitizePaint, head: sanitizeHead, outfit: sanitizeOutfitLook };
+const MODES = Object.keys(SAN);
 
 function stem(w) {
   return w.replace(/(ami|ach|owie|ow|om|em|ie|ego|emu|ymi|ych|owa|owy|owe|ka|ki|ek|y|i|a|e|o|u|s|es)$/,'');
@@ -13,20 +14,20 @@ function tokens(t) { return normText(t).split(' ').filter((w) => w.length > 1).m
 
 export class IdeaAPI {
   constructor() {
-    this.mem = { idea: new Map(), paint: new Map(), head: new Map() };
-    this.index = { idea: [], paint: [], head: [] };
+    this.mem = Object.fromEntries(MODES.map((m) => [m, new Map()]));
+    this.index = Object.fromEntries(MODES.map((m) => [m, []]));
     this.online = true;
     this.status = 'unknown';
     this.names = [];
     try {
       const c = JSON.parse(localStorage.getItem(LS) || '{}');
-      for (const mode of ['idea', 'paint', 'head']) for (const [k, v] of Object.entries(c[mode] || {})) this.mem[mode].set(k, v);
+      for (const mode of MODES) for (const [k, v] of Object.entries(c[mode] || {})) this.mem[mode].set(k, v);
     } catch (e) { /* corrupt cache */ }
   }
 
   persist() {
     const out = {};
-    for (const mode of ['idea', 'paint', 'head']) {
+    for (const mode of MODES) {
       const ent = [...this.mem[mode].entries()].slice(-400);
       out[mode] = Object.fromEntries(ent);
     }
@@ -39,7 +40,7 @@ export class IdeaAPI {
       if (!r.ok) return 0;
       const s = await r.json();
       let n = 0;
-      for (const mode of ['idea', 'paint', 'head']) {
+      for (const mode of MODES) {
         for (const rec0 of s[mode] || []) {
           const rec = SAN[mode](rec0);
           rec.by = rec0.by || 'the Book';
@@ -97,7 +98,7 @@ export class IdeaAPI {
     if (hit) return { rec: { ...hit, name: opt.keepName ? hit.name : niceName(text, hit) }, fresh: false, source: 'book' };
     try {
       const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), opt.timeout || 14000);
+      const timer = setTimeout(() => ctl.abort(), opt.timeout || 32000);
       const r = await fetch(CFG.api + '/api/make', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: String(text).slice(0, 120), mode, by: String(by).slice(0, 16), free: !!opt.free }), signal: ctl.signal });
       clearTimeout(timer);
       const j = await r.json().catch(() => ({}));

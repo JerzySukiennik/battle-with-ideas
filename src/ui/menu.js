@@ -14,20 +14,33 @@ class MenuMode {
   start() {
     const g = this.game;
     g.resetArena(424242);
-    g.me.spawn(new THREE.Vector3(0, 0.02, 0), 0);
+    g.me.spawn(new THREE.Vector3(0, g.island.heightAt(0, 0) + 0.03, 0), 0);
     g.me.wena = 100;
     g.cam.play({ dur: 1e9, hold: true, fn: (k, cam, dt) => {
       this.t += dt;
       const p = g.me.pos(new THREE.Vector3());
-      const a = this.t * 0.07 + 0.6;
-      const side = new THREE.Vector3(-Math.sin(a), 0, Math.cos(a)).multiplyScalar(-1.3);
-      cam.position.lerp(new THREE.Vector3(p.x + Math.cos(a) * 4.2, p.y + 1.1, p.z + Math.sin(a) * 4.2).add(side), 0.06);
-      cam.lookAt(p.x + side.x, p.y + 0.35, p.z + side.z);
+      const a = Math.sin(this.t * 0.12) * 0.5 + 0.35;
+      const from = new THREE.Vector3(p.x + Math.sin(a) * 4.4, p.y + 0.9, p.z + Math.cos(a) * 4.4);
+      const fwd = p.clone().sub(from).setY(0).normalize();
+      const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+      cam.position.lerp(from, 0.08);
+      cam.lookAt(p.x - right.x * 1.35, p.y + 0.35, p.z - right.z * 1.35);
     } });
   }
   canAct() { return false; }
   invulnerable() { return true; }
-  update(dt) { const me = this.game.me; if (me && me.rag) { me.rag.move.set(0, 0, 0); me.rag.yaw += dt * 0.25; me.rag.aim.set(Math.sin(this.t), 0.1, Math.cos(this.t)); } }
+  faceCamera() {
+    const me = this.game.me, c = this.game.cam.camera || this.game.E.renderer.camera;
+    if (!me || !me.rag || !c) return;
+    const p = me.pos(new THREE.Vector3());
+    me.rag.yaw = Math.atan2(c.position.x - p.x, c.position.z - p.z) - 0.35;
+    this.hold = 2.5;
+  }
+  update(dt) {
+    const me = this.game.me;
+    if (this.hold > 0) this.hold -= dt;
+    if (me && me.rag) { me.rag.move.set(0, 0, 0); if (!(this.hold > 0)) me.rag.yaw += dt * 0.25; me.rag.aim.set(Math.sin(this.t), 0.1, Math.cos(this.t)); }
+  }
   hudInfo() { return { title: '', sub: '' }; }
   stop() { this.game.cam.stop(); }
 }
@@ -104,8 +117,14 @@ export class App {
   ensureMe() {
     const g = this.game, p = this.profile;
     const color = CFG.colors[p.color % CFG.colors.length];
-    if (!g.me) { g.addLocal({ id: p.id, name: p.name, color, head: p.head, team: 0 }); g.headRec = p.head; }
+    if (!g.me) { g.addLocal({ id: p.id, name: p.name, color, head: p.head, outfit: p.outfit || null, team: 0 }); g.headRec = p.head; }
     else { g.me.name = p.name; g.me.color = color; g.me.puppet.setColor(color); }
+    g.onWear = (outfit, name) => { p.outfit = outfit || null; p.outfitName = outfit ? name || p.outfitName : ''; this.saveProfile(); };
+  }
+
+  outfitLine() {
+    const p = this.profile;
+    return p.outfit ? `Wearing: ${esc(p.outfitName || 'an outfit')} <button class="link" id="m-fitoff">take it off</button>` : 'Nothing yet: just a body suit in your colour.';
   }
 
   render(html) {
@@ -124,6 +143,9 @@ export class App {
         <div class="field"><label>What do you have instead of a head? Type anything.</label>
           <div class="row"><input id="m-head" style="flex:1" maxlength="40" placeholder="pizza, cactus, old TV, kalafior..." value="${esc(p.headText || '')}"><button class="btn slim" id="m-headgo">Make it</button></div>
           <div class="muted" id="m-headmsg">Now wearing: ${esc(p.head.name)}</div></div>
+        <div class="field"><label>What are you wearing? Any costume, suit or armour.</label>
+          <div class="row"><input id="m-fit" style="flex:1" maxlength="40" placeholder="skafander, knight, dinosaur, pirate..." value="${esc(p.outfitText || '')}"><button class="btn slim" id="m-fitgo">Wear it</button></div>
+          <div class="muted" id="m-fitmsg">${this.outfitLine()}</div></div>
         <div class="row" id="m-colors">${CFG.colors.map((c, i) => `<button class="btn slim ${i === p.color ? 'sel' : ''}" data-c="${i}" style="width:38px;height:34px;padding:0;background:${c}"></button>`).join('')}</div>
         <button class="btn big go" id="m-coop">Defend the Spark<small>Story co-op: 10 waves of the Great Boredom, alone or with friends</small></button>
         <button class="btn big" id="m-online">Thinkers' Tournament<small>Online battles: free for all or teams, up to 6 players</small></button>
@@ -142,14 +164,36 @@ export class App {
       try {
         const res = await this.api.resolve(t, 'head', p.name, { keepName: false });
         p.head = res.rec; p.headText = t; this.saveProfile();
+        this.game.me.head = res.rec;
         this.game.me.puppet.setHead(res.rec);
         this.game.headRec = res.rec;
-        msg.textContent = `Now wearing: ${res.rec.name}${res.fresh ? ' (first in the world!)' : ''}`;
+        if (this.game.mode && this.game.mode.faceCamera) this.game.mode.faceCamera();
+        const hidden = p.outfit && p.outfit.head;
+        msg.textContent = `Now wearing: ${res.rec.name}${res.fresh ? ' (first in the world!)' : ''}${hidden ? '. Take the costume off to see it.' : ''}`;
         this.E.audio.play('pop', null, 0.6);
       } catch (e) { msg.textContent = e.message; }
     };
     r.querySelector('#m-headgo').onclick = makeHead;
     head.onkeydown = (e) => { if (e.key === 'Enter') makeHead(); };
+    const fit = r.querySelector('#m-fit'), fmsg = r.querySelector('#m-fitmsg');
+    const bindOff = () => { const b = fmsg.querySelector('#m-fitoff'); if (b) b.onclick = () => { this.game.me.wear(null); p.outfit = null; p.outfitName = ''; this.saveProfile(); fmsg.innerHTML = this.outfitLine(); this.E.audio.play('pop', null, 0.5); }; };
+    const makeFit = async () => {
+      const t = fit.value.trim();
+      if (!t) return;
+      fmsg.textContent = 'Tailoring your outfit... this takes a few seconds.';
+      try {
+        const res = await this.api.resolve(t, 'outfit', p.name, { keepName: false });
+        p.outfit = res.rec.outfit; p.outfitName = res.rec.name; p.outfitText = t; this.saveProfile();
+        this.game.me.wear(res.rec.outfit);
+        if (this.game.mode && this.game.mode.faceCamera) this.game.mode.faceCamera();
+        fmsg.innerHTML = this.outfitLine() + (res.fresh ? ' (first in the world!)' : '');
+        bindOff();
+        this.E.audio.play('pop', null, 0.6);
+      } catch (e) { fmsg.textContent = e.message; }
+    };
+    r.querySelector('#m-fitgo').onclick = makeFit;
+    fit.onkeydown = (e) => { if (e.key === 'Enter') makeFit(); };
+    bindOff();
     r.querySelector('#m-practice').onclick = () => this.startLocal('practice');
     r.querySelector('#m-coop').onclick = () => this.showCoopChoice();
     r.querySelector('#m-online').onclick = () => this.showOnline();

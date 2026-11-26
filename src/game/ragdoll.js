@@ -3,8 +3,9 @@
 import * as THREE from 'three';
 import RAPIER from 'rapier';
 import { GR } from '../engine/physics.js';
-import { buildModel, animateModel } from '../engine/prims.js';
+import { buildModel, animateModel, disposeModel } from '../engine/prims.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const PART_NAMES = ['pelvis', 'chest', 'head', 'uarmL', 'farmL', 'uarmR', 'farmR', 'thighL', 'shinL', 'thighR', 'shinR'];
 
@@ -40,62 +41,173 @@ const STAND = 0.98;
 
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _q4 = new THREE.Quaternion();
 const _e = new THREE.Euler();
 const UP = new THREE.Vector3(0, 1, 0);
+
+const REST = {
+  pelvis: [0, 0.98, 0], chest: [0, 1.32, 0], head: [0, 1.74, 0], uarmL: [-0.28, 1.37, 0], farmL: [-0.28, 1.11, 0],
+  uarmR: [0.28, 1.37, 0], farmR: [0.28, 1.11, 0], thighL: [-0.1, 0.7, 0], shinL: [-0.1, 0.3, 0], thighR: [0.1, 0.7, 0], shinR: [0.1, 0.3, 0],
+};
+const BI = Object.fromEntries(PART_NAMES.map((n, i) => [n, i]));
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+function skinPart(geo, weightFn) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  const pos = g.attributes.position, n = pos.count;
+  const idx = new Uint16Array(n * 4), wt = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const w = weightFn(pos.getX(i), pos.getY(i), pos.getZ(i));
+    let k = 0;
+    for (const [bone, val] of w) { if (k < 4) { idx[i * 4 + k] = BI[bone]; wt[i * 4 + k] = val; k++; } }
+  }
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
+  g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(wt, 4));
+  if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(n * 2), 2));
+  for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'skinIndex', 'skinWeight'].includes(k)) g.deleteAttribute(k);
+  return g;
+}
+
+function blend(a, b, lo, hi, y) { const t = smooth(lo, hi, y); return [[a, 1 - t], [b, t]]; }
+
+function bodyGeometry() {
+  const parts = [];
+  const torso = new THREE.CapsuleGeometry(0.215, 0.34, 8, 20, 12);
+  torso.scale(1.15, 1, 0.84);
+  torso.translate(0, 1.19, 0);
+  parts.push(skinPart(torso, (x, y) => blend('pelvis', 'chest', 1.03, 1.2, y)));
+  const neck = new THREE.CylinderGeometry(0.075, 0.085, 0.14, 12, 3);
+  neck.translate(0, 1.58, 0);
+  parts.push(skinPart(neck, (x, y) => blend('chest', 'head', 1.55, 1.63, y)));
+  for (const s of [-1, 1]) {
+    const side = s < 0 ? 'L' : 'R';
+    const arm = new THREE.CapsuleGeometry(0.07, 0.47, 6, 12, 14);
+    arm.translate(s * 0.29, 1.255, 0);
+    parts.push(skinPart(arm, (x, y) => blend('farm' + side, 'uarm' + side, 1.19, 1.29, y)));
+    const leg = new THREE.CapsuleGeometry(0.092, 0.72, 6, 12, 18);
+    leg.translate(s * 0.1, 0.52, 0);
+    parts.push(skinPart(leg, (x, y) => y > 0.9 ? [['pelvis', smooth(0.9, 1.0, y)], ['thigh' + side, 1 - smooth(0.9, 1.0, y)]] : blend('shin' + side, 'thigh' + side, 0.45, 0.56, y)));
+  }
+  return mergeGeometries(parts);
+}
+
+function extremityGeometry() {
+  const parts = [];
+  for (const s of [-1, 1]) {
+    const side = s < 0 ? 'L' : 'R';
+    const hand = new THREE.SphereGeometry(0.083, 14, 10);
+    hand.scale(1, 1.05, 0.9);
+    hand.translate(s * 0.29, 0.94, 0.01);
+    parts.push(skinPart(hand, () => [['farm' + side, 1]]));
+    const thumb = new THREE.SphereGeometry(0.036, 10, 8);
+    thumb.translate(s * 0.25, 0.97, 0.06);
+    parts.push(skinPart(thumb, () => [['farm' + side, 1]]));
+    const foot = new RoundedBoxGeometry(0.16, 0.1, 0.27, 3, 0.045);
+    foot.translate(s * 0.1, 0.05, 0.045);
+    parts.push(skinPart(foot, () => [['shin' + side, 1]]));
+  }
+  return mergeGeometries(parts);
+}
+
+let BODY_GEO = null, EXT_GEO = null;
 
 export class Puppet {
   constructor(scene, color = '#4c8dff', opt = {}) {
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.mat = new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.02 });
-    this.limbMat = new THREE.MeshStandardMaterial({ color: '#f4f2ec', roughness: 0.7 });
+    this.mat = new THREE.MeshStandardMaterial({ color, roughness: 0.42, metalness: 0.0 });
+    this.limbMat = new THREE.MeshStandardMaterial({ color: '#f7f5ef', roughness: 0.55 });
     this.ghostMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, depthWrite: false });
+    if (!BODY_GEO) { BODY_GEO = bodyGeometry(); EXT_GEO = extremityGeometry(); }
     this.meshes = {};
-    const geo = {
-      box: new RoundedBoxGeometry(1, 1, 1, 3, 0.22),
-      cap: new THREE.CapsuleGeometry(1, 1, 4, 10),
-      ball: new THREE.SphereGeometry(1, 14, 10),
-    };
+    const bones = [];
     for (const n of PART_NAMES) {
-      const d = DEF[n];
-      const g = new THREE.Group();
-      let m;
-      if (d.kind === 'box') { m = new THREE.Mesh(geo.box, this.mat); m.scale.set(d.s[0] * 2, d.s[1] * 2, d.s[2] * 2); if (n === 'pelvis') m.scale.y *= 1.4; }
-      else if (d.kind === 'cap') { m = new THREE.Mesh(geo.cap, LEGS.has(n) || n.startsWith('u') ? this.mat : this.limbMat); m.scale.set(d.s[1], d.s[0], d.s[1]); }
-      else { m = new THREE.Object3D(); }
-      if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; }
-      g.add(m);
-      if (n === 'farmL' || n === 'farmR') { const h = new THREE.Mesh(geo.ball, this.limbMat); h.scale.setScalar(0.085); h.position.y = -0.18; h.castShadow = true; g.add(h); g.userData.hand = h; }
-      if (n === 'shinL' || n === 'shinR') { const f = new THREE.Mesh(geo.box, this.limbMat); f.scale.set(0.15, 0.1, 0.27); f.position.set(0, -0.2, 0.05); f.castShadow = true; g.add(f); }
-      g.userData.inner = m;
-      this.group.add(g);
-      this.meshes[n] = g;
+      const b = new THREE.Bone();
+      b.position.set(...REST[n]);
+      this.group.add(b);
+      this.meshes[n] = b;
+      bones.push(b);
+    }
+    this.group.updateMatrixWorld(true);
+    const skeleton = new THREE.Skeleton(bones);
+    this.body = new THREE.SkinnedMesh(BODY_GEO, this.mat);
+    this.ext = new THREE.SkinnedMesh(EXT_GEO, this.limbMat);
+    for (const m of [this.body, this.ext]) {
+      m.frustumCulled = false;
+      m.castShadow = true;
+      this.group.add(m);
+      m.bind(skeleton, new THREE.Matrix4());
     }
     this.headSlot = new THREE.Group();
-    this.headSlot.position.y = -0.14;
+    this.headSlot.position.y = -0.11;
     this.meshes.head.add(this.headSlot);
     this.headModel = null;
+    this.headPieces = null;
     this.eyes = null;
+    this.ownHead = opt.head || null;
+    this.outfit = null;
+    this.pieces = [];
     this.ghost = false;
     this.t = Math.random() * 10;
-    this.label = null;
-    if (opt.head) this.setHead(opt.head);
+    this.refreshHead();
   }
 
   setColor(c) { this.mat.color.set(c); }
 
+  bodyColor(base, teams = false) { return this.outfit && !teams ? this.outfit.suit : base; }
+
   setHead(recipe) {
-    if (this.headModel) { this.headSlot.remove(this.headModel.group); }
-    const parts = recipe && recipe.parts ? recipe.parts : DEFAULT_HEAD.parts;
-    const model = buildModel(parts, 0.56, {});
-    model.group.position.y = 0;
+    this.ownHead = recipe || null;
+    this.refreshHead();
+  }
+
+  refreshHead() {
+    if (this.headModel) { this.headSlot.remove(this.headModel.group); disposeModel(this.headModel); }
+    if (this.headPieces) { this.headSlot.remove(this.headPieces.group); disposeModel(this.headPieces); this.headPieces = null; }
+    const o = this.outfit;
+    const parts = o && o.head ? o.head : this.ownHead && this.ownHead.parts ? this.ownHead.parts : DEFAULT_HEAD.parts;
+    const model = buildModel(parts, 0.58, {});
     this.headSlot.add(model.group);
     this.headModel = model;
     if (this.eyes) this.headSlot.remove(this.eyes);
     this.eyes = makeEyes(model);
     this.headSlot.add(this.eyes);
+    const hp = o ? o.pieces.filter((p) => p.b === 'head') : [];
+    if (hp.length) {
+      this.headPieces = buildModel(hp, 1, { origin: [0, 1.63 + Math.max(-0.3, model.height - 0.57), 0] });
+      this.headSlot.add(this.headPieces.group);
+    }
     this._ghostSet = undefined;
     this.setGhost(this.ghost);
+  }
+
+  setOutfit(outfit) {
+    for (const m of this.pieces) { m.group.parent && m.group.parent.remove(m.group); disposeModel(m); }
+    this.pieces = [];
+    this.outfit = outfit && outfit.pieces ? outfit : null;
+    const o = this.outfit;
+    this.limbMat.color.set(o ? o.trim : '#f7f5ef');
+    const look = SUIT_LOOK[o ? o.mat : 'none'] || SUIT_LOOK.none;
+    this.mat.roughness = look[0]; this.mat.metalness = look[1];
+    this.limbMat.roughness = Math.max(0.3, look[0]); this.limbMat.metalness = look[1] * 0.6;
+    if (o) {
+      const byBone = {};
+      const put = (bone, p) => (byBone[bone] = byBone[bone] || []).push(p);
+      for (const p0 of o.pieces) {
+        if (p0.b === 'head') continue;
+        const limb = LIMB[p0.b];
+        if (!limb) { put(p0.b, p0); continue; }
+        const p = fitLimb(p0, limb);
+        put(limb + 'R', p);
+        put(limb + 'L', { ...p, p: [-p.p[0], p.p[1], p.p[2]], r: [p.r[0], -p.r[1], -p.r[2]] });
+      }
+      for (const bone in byBone) {
+        const m = buildModel(byBone[bone], 1, { origin: REST[bone] });
+        this.meshes[bone].add(m.group);
+        this.pieces.push(m);
+      }
+    }
+    this.refreshHead();
   }
 
   setGhost(on) {
@@ -134,6 +246,8 @@ export class Puppet {
   tick(dt, speed = 0) {
     this.t += dt;
     if (this.headModel) animateModel(this.headModel, this.t, speed, dt);
+    if (this.headPieces && this.headPieces.anims.length) animateModel(this.headPieces, this.t, speed, dt);
+    for (const m of this.pieces) if (m.anims.length) animateModel(m, this.t, speed, dt);
     if (this.eyes) {
       for (const p of this.eyes.userData.pupils) {
         p.userData.v.x += (-p.position.x * 60 + (Math.random() - 0.5) * speed * 40) * dt;
@@ -146,9 +260,21 @@ export class Puppet {
   }
 
   headTop() { const h = this.meshes.head; return _v.copy(h.position).add(_v2.set(0, 0.5, 0)); }
-  handPos(side = 'R', out = new THREE.Vector3()) { const g = this.meshes['farm' + side]; return out.set(0, -0.2, 0).applyQuaternion(g.quaternion).add(g.position); }
+  handPos(side = 'R', out = new THREE.Vector3()) { const g = this.meshes['farm' + side]; return out.set(0, -0.18, 0).applyQuaternion(g.quaternion).add(g.position); }
 
   dispose(scene) { scene.remove(this.group); this.mat.dispose(); }
+}
+
+const LIMB = { upper_arm: 'uarm', forearm: 'farm', thigh: 'thigh', shin: 'shin' };
+const SUIT_LOOK = { none: [0.42, 0], matte: [0.62, 0], shiny: [0.22, 0.02], metal: [0.3, 0.75], glow: [0.35, 0], glass: [0.12, 0.05] };
+
+function fitLimb(p, limb) {
+  const c = REST[limb + 'R'];
+  let x = p.p[0], y = p.p[1], z = p.p[2];
+  const near = Math.abs(Math.abs(x) - c[0]) < 0.3 && y > c[1] - 0.45 && y < c[1] + 0.4;
+  if (!near) { x = c[0] + x; y = c[1] + y; z = c[2] + z; }
+  else if (x < 0) x = -x;
+  return { ...p, p: [x, y, z] };
 }
 
 export const DEFAULT_HEAD = {
@@ -238,7 +364,16 @@ export class Ragdoll {
       this.joints.push({ ...j, joint });
     }
     this.parentOf = {};
-    for (const j of JOINTS) this.parentOf[j.b] = j.a;
+    this.anchorP = {};
+    this.anchorC = {};
+    for (const j of JOINTS) {
+      this.parentOf[j.b] = j.a;
+      this.anchorP[j.b] = new THREE.Vector3(...j.at).sub(new THREE.Vector3(...DEF[j.a].p)).multiplyScalar(S);
+      this.anchorC[j.b] = new THREE.Vector3(...j.at).sub(new THREE.Vector3(...DEF[j.b].p)).multiplyScalar(S);
+      const p = DEF[j.b].p;
+      const d2 = ((j.at[0] - p[0]) ** 2 + (j.at[1] - p[1]) ** 2 + (j.at[2] - p[2]) ** 2) * S * S;
+      this.inertia[j.b] += this.masses[j.b] * d2;
+    }
     this.targets = {};
     for (const j of JOINTS) this.targets[j.b] = j.type === 'hinge' ? 0 : new THREE.Quaternion();
     this.strength = 1;
@@ -262,6 +397,7 @@ export class Ragdoll {
     this.bounce = false;
     this.frozen = false;
     this.landed = 0;
+    this.jumpMul = 1;
   }
 
   get pelvis() { return this.bodies.pelvis; }
@@ -309,7 +445,7 @@ export class Ragdoll {
     for (const n of PART_NAMES) this.colliders[n].setEnabled(!on);
   }
 
-  pd(name, parentQ, targetLocal, gain, parentBody, boost = 1) {
+  pd(name, parentQ, targetLocal, gain, parentBody, boost = 1, ff = 0) {
     const b = this.bodies[name];
     const r = b.rotation();
     _q.set(r.x, r.y, r.z, r.w);
@@ -320,16 +456,31 @@ export class Ragdoll {
     const s = Math.sqrt(1 - _q3.w * _q3.w);
     if (s > 1e-4) _v.set(_q3.x / s, _q3.y / s, _q3.z / s).multiplyScalar(ang); else _v.set(0, 0, 0);
     const w = b.angvel();
-    const pw = parentBody ? parentBody.angvel() : { x: 0, y: 0, z: 0 };
+    if (parentBody) {
+      const pw = parentBody.angvel();
+      const k = 11 * gain;
+      _v2.set(pw.x + _v.x * k, pw.y + _v.y * k, pw.z + _v.z * k);
+      if (ff) { _v3.set(ff, 0, 0).applyQuaternion(parentQ); _v2.add(_v3); }
+      const L = _v2.length();
+      if (L > 30) _v2.multiplyScalar(30 / L);
+      const bl = Math.min(0.65, 0.65 * gain);
+      _v2.set(w.x + (_v2.x - w.x) * bl, w.y + (_v2.y - w.y) * bl, w.z + (_v2.z - w.z) * bl);
+      b.setAngvel(_v2, true);
+      const pt = parentBody.translation(), pr = parentBody.rotation(), pv = parentBody.linvel();
+      _a.copy(this.anchorP[name]).applyQuaternion(_q4.set(pr.x, pr.y, pr.z, pr.w));
+      _b.set(pw.x, pw.y, pw.z).cross(_a).add(_c.set(pv.x, pv.y, pv.z));
+      _a.copy(this.anchorC[name]).applyQuaternion(_q4.set(r.x, r.y, r.z, r.w));
+      _b.sub(_c.copy(_v2).cross(_a));
+      const cv = b.linvel();
+      b.setLinvel({ x: cv.x + (_b.x - cv.x) * bl, y: cv.y + (_b.y - cv.y) * bl, z: cv.z + (_b.z - cv.z) * bl }, true);
+      return;
+    }
     const k = 14 * gain;
-    _v2.set(_v.x * k - (w.x - pw.x), _v.y * k - (w.y - pw.y), _v.z * k - (w.z - pw.z)).multiplyScalar(Math.min(0.55, 0.5 * gain + 0.05));
+    _v2.set(_v.x * k - w.x, _v.y * k - w.y, _v.z * k - w.z).multiplyScalar(Math.min(0.55, 0.5 * gain + 0.05));
     const L = _v2.length();
-    if (L > 25) _v2.multiplyScalar(25 / L);
-    const Ic = this.inertia[name] * boost;
-    let I = Ic;
-    if (parentBody) { const Ip = this.inertia[this.parentOf[name]]; I = (Ic * Ip) / (Ic + Ip); }
+    if (L > 14) _v2.multiplyScalar(14 / L);
+    const I = this.inertia[name] * boost;
     b.applyTorqueImpulse({ x: _v2.x * I, y: _v2.y * I, z: _v2.z * I }, true);
-    if (parentBody) parentBody.applyTorqueImpulse({ x: -_v2.x * I, y: -_v2.y * I, z: -_v2.z * I }, true);
   }
 
   step(dt) {
@@ -357,11 +508,15 @@ export class Ragdoll {
       for (const n of PART_NAMES) { const m = this.masses[n]; B[n].applyImpulse({ x: 0, y: extra * m, z: 0 }, true); }
     }
     if (this.grounded && s > 0.05) {
-      const err = this.groundY + standH - pt.y;
+      const swing = 0.55 * Math.min(1, Math.hypot(lv.x, lv.z) / 4.5) * Math.sin(this.phase);
+      const bob = 0.9 * this.scale * (1 - Math.cos(swing));
+      const err = this.groundY + standH - bob - pt.y;
       const k = 220 * this.wobble, c = 19;
-      let acc = g + k * err - c * lv.y;
-      if (this.bounce) acc += 0;
-      acc = Math.max(-10, Math.min(60, acc)) * s;
+      let vy = 0;
+      for (const n of PART_NAMES) vy += B[n].linvel().y * this.masses[n];
+      vy /= M;
+      let acc = g + k * err - c * vy;
+      acc = Math.max(g - 30, Math.min(g + 30, acc)) * s;
       const J = acc * M * dt;
       B.pelvis.applyImpulse({ x: 0, y: J * 0.62, z: 0 }, true);
       B.chest.applyImpulse({ x: 0, y: J * 0.38, z: 0 }, true);
@@ -375,14 +530,12 @@ export class Ragdoll {
     if (dl > 1e-4 && s > 0.1 && (this.move.lengthSq() > 0.01 || (this.grounded && !this.lowFriction))) {
       const f = Math.min(1, maxDv / dl);
       const ix = dvx * f, iz = dvz * f;
-      const up = M * 0.72;
-      B.pelvis.applyImpulse({ x: ix * up * 0.55, y: 0, z: iz * up * 0.55 }, true);
-      B.chest.applyImpulse({ x: ix * up * 0.45, y: 0, z: iz * up * 0.45 }, true);
+      for (const n of PART_NAMES) { const m = this.masses[n]; B[n].applyImpulse({ x: ix * m, y: 0, z: iz * m }, true); }
     }
     if (this.jumpReq) {
       this.jumpReq = false;
       if (this.grounded && s > 0.6) {
-        const v = 8.6 * Math.sqrt(Math.max(0.3, this.gravityMul)) * (this.bounce ? 1.45 : 1);
+        const v = 8.6 * Math.sqrt(Math.max(0.3, this.gravityMul)) * (this.bounce ? 1.45 : 1) * this.jumpMul;
         for (const n of PART_NAMES) { const m = this.masses[n]; B[n].applyImpulse({ x: 0, y: v * m * 0.9, z: 0 }, true); }
         this.air = 0.28;
         this.grounded = false;
@@ -393,7 +546,8 @@ export class Ragdoll {
       this.air = 0.25;
     }
     const hspeed = Math.hypot(lv.x, lv.z);
-    this.phase += dt * (hspeed * 2.1 + (hspeed > 0.3 ? 2 : 0));
+    const phRate = hspeed * 3.1 / this.scale + (hspeed > 0.4 ? 1.2 : 0);
+    this.phase += dt * phRate;
     const yawQ = _q2.setFromAxisAngle(UP, this.yaw).clone();
     const lean = new THREE.Quaternion().setFromEuler(_e.set(THREE.MathUtils.clamp(dvz * 0.02, -0.25, 0.25), 0, THREE.MathUtils.clamp(-dvx * 0.02, -0.25, 0.25)));
     const torsoGain = s * 0.9 * this.wobble;
@@ -413,7 +567,7 @@ export class Ragdoll {
       const ht = B.head.translation(), hv = B.head.linvel();
       const hx = ct.x - ht.x, hz = ct.z - ht.z;
       const mh = this.masses.head;
-      const hjx = (hx * 90 * s - (hv.x - cv.x) * 10 * s) * mh * dt, hjz = (hz * 90 * s - (hv.z - cv.z) * 10 * s) * mh * dt;
+      const hjx = (hx * 160 * s - (hv.x - cv.x) * 14 * s) * mh * dt, hjz = (hz * 160 * s - (hv.z - cv.z) * 14 * s) * mh * dt;
       B.head.applyImpulse({ x: hjx, y: 0, z: hjz }, true);
       B.chest.applyImpulse({ x: -hjx, y: 0, z: -hjz }, true);
     }
@@ -422,33 +576,37 @@ export class Ragdoll {
     const pr = B.pelvis.rotation(), cr = B.chest.rotation();
     const pq = new THREE.Quaternion(pr.x, pr.y, pr.z, pr.w), cq = new THREE.Quaternion(cr.x, cr.y, cr.z, cr.w);
     const rot = (x, y, z) => new THREE.Quaternion().setFromEuler(_e.set(x, y, z));
-    let hipL, hipR, kneeL, kneeR;
+    let hipL, hipR, kneeL, kneeR, ffL = 0, ffR = 0;
     if (this.grounded || s < 0.5) {
-      hipL = rot(-Math.sin(ph) * 0.75 * amp, 0, 0); hipR = rot(Math.sin(ph) * 0.75 * amp, 0, 0);
-      kneeL = Math.max(0, Math.cos(ph)) * 1.1 * amp + 0.12; kneeR = Math.max(0, -Math.cos(ph)) * 1.1 * amp + 0.12;
+      ffL = -Math.cos(ph) * 0.55 * amp * phRate * s; ffR = -ffL;
+      hipL = rot(-Math.sin(ph) * 0.55 * amp, 0, 0); hipR = rot(Math.sin(ph) * 0.55 * amp, 0, 0);
+      kneeL = Math.max(0, Math.cos(ph)) * 0.75 * amp + 0.08; kneeR = Math.max(0, -Math.cos(ph)) * 0.75 * amp + 0.08;
     } else {
       hipL = rot(-0.6, 0, 0.05); hipR = rot(-0.25, 0, -0.05); kneeL = 1.2; kneeR = 0.7;
     }
     const limbGain = 0.12 + s * 0.88;
-    this.pd('thighL', pq, hipL, limbGain * 0.9, B.pelvis);
-    this.pd('thighR', pq, hipR, limbGain * 0.9, B.pelvis);
+    this.pd('thighL', pq, hipL, limbGain * 2.2, B.pelvis, 1, ffL);
+    this.pd('thighR', pq, hipR, limbGain * 2.2, B.pelvis, 1, ffR);
     let shL, shR, elL = -0.35, elR = -0.35;
     const armSwing = Math.sin(ph) * 0.55 * amp;
+    let ffA = this.grounded ? Math.cos(ph) * 0.55 * amp * phRate * s : 0, ffAL = ffA, ffAR = -ffA;
     shL = rot(armSwing, 0, -0.14 - (this.grounded ? 0 : 0.9));
     shR = rot(-armSwing, 0, 0.14 + (this.grounded ? 0 : 0.9));
     if (this.arms !== 'idle') {
       const inv = cq.clone().invert();
       const dir = this.aim.clone().applyQuaternion(inv).normalize();
       const aimQ = new THREE.Quaternion().setFromUnitVectors(_v3.set(0, -1, 0), dir);
+      ffAR = 0;
+      if (this.arms === 'reach') ffAL = 0;
       if (this.arms === 'aim' || this.arms === 'hold') { shR = aimQ; elR = this.arms === 'hold' ? -0.25 : -0.05; }
       if (this.arms === 'reach') { shL = aimQ.clone().multiply(rot(0, 0, 0.12)); shR = aimQ.clone().multiply(rot(0, 0, -0.12)); elL = elR = -0.05; }
       if (this.arms === 'throw') { shR = rot(-2.6, 0, 0.2); elR = -1.2; }
       if (this.arms === 'swing') { shR = aimQ.clone().multiply(rot(0.9, 0, 0)); elR = -0.2; }
     }
-    this.pd('uarmL', cq, shL, limbGain * 0.6, B.chest);
-    this.pd('uarmR', cq, shR, limbGain * 0.6, B.chest);
+    this.pd('uarmL', cq, shL, limbGain * 1.1, B.chest, 1, ffAL);
+    this.pd('uarmR', cq, shR, limbGain * 1.1, B.chest, 1, ffAR);
     const look = rot(THREE.MathUtils.clamp(-this.aim.y * 0.6, -0.5, 0.5), 0, 0);
-    this.pd('head', cq, look, limbGain * 0.55, B.chest);
+    this.pd('head', cq, look, limbGain * 0.8, B.chest);
     for (const j of this.joints) {
       if (j.type !== 'hinge') continue;
       let target = 0;

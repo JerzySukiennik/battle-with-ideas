@@ -45,21 +45,23 @@ export class Story {
     g.resetArena(777);
     g.spawnMe(0);
     g.me.puppet.setVisible(false);
-    if (g.me.rag) g.me.rag.teleport(new THREE.Vector3(0, 0, 22), Math.PI);
+    if (g.me.rag) g.me.rag.teleport(new THREE.Vector3(0, g.island.heightAt(0, 22) + 0.03, 22), Math.PI);
     g.island.paint(BLOOM, new THREE.Vector3(0, 0, 0), 5, 0.05);
     this.ids = [];
     const spots = [[-8, 6], [9, -5], [6, 9], [-12, -9], [-4, -13]];
     DEMOS.forEach((rec, i) => {
       const id = g.ideas.newId('spark');
       this.ids.push(id);
-      g.onEvent({ k: 'spawn', id, owner: 'spark', rec, at: [spots[i][0], 0, spots[i][1]], aim: [0, 0, 0], yaw: i, seed: i, uses: 0 }, true);
+      g.onEvent({ k: 'spawn', id, owner: 'spark', rec, at: [spots[i][0], g.island.heightAt(spots[i][0], spots[i][1]), spots[i][1]], aim: [0, 0, 0], yaw: i, seed: i, uses: 0 }, true);
     });
     this.ui = document.createElement('div');
     this.ui.className = 'story';
-    this.ui.innerHTML = '<div class="title">Battle with Ideas</div><div class="line"></div><button class="btn slim skip">Skip</button>';
+    this.ui.innerHTML = '<div class="title"><b>Battle with Ideas</b><span>Type an idea. Make it real.</span></div><div class="line"><span></span></div><button class="btn slim skip">Skip intro ⏭</button>';
     this.app.root.append(this.ui);
     this.ui.querySelector('.skip').onclick = () => this.finish();
     this.lineEl = this.ui.querySelector('.line');
+    this.lineText = this.lineEl.querySelector('span');
+    this.app.E.music.pause();
     this.titleEl = this.ui.querySelector('.title');
     this.skipKey = (e) => { if (e.code === 'Escape' || e.code === 'Enter' || e.code === 'Space') this.finish(); };
     addEventListener('keydown', this.skipKey);
@@ -93,7 +95,7 @@ export class Story {
       c.position.set(0, 40 - k * 10, 0.1 + k * 14);
       c.lookAt(0, 0, 0);
     } else if (t < 31) {
-      if (!this.spark) { this.spark = true; g.onEvent({ k: 'spawn', id: g.ideas.newId('spark'), owner: 'spark', rec: SPARK, at: [0, 0, 0], aim: [0, 0, 0], yaw: 0, seed: 1, uses: 0 }, true); R.glow.position.set(0, 2.2, 0); g.E.audio.play('magic', null, 0.9); }
+      if (!this.spark) { this.spark = true; g.onEvent({ k: 'spawn', id: g.ideas.newId('spark'), owner: 'spark', rec: SPARK, at: [0, g.island.heightAt(0, 0), 0], aim: [0, 0, 0], yaw: 0, seed: 1, uses: 0 }, true); R.glow.position.set(0, 2.2, 0); g.E.audio.play('magic', null, 0.9); }
       R.glow.intensity = Math.min(8, (t - 24) * 3);
       const k = (t - 24) / 7;
       c.position.set(Math.sin(k * 1.2) * 6, 2.6 + k, Math.cos(k * 1.2) * 6);
@@ -103,16 +105,19 @@ export class Story {
       if (!this.walking) {
         this.walking = true;
         me.puppet.setVisible(true);
-        if (me.rag) me.rag.teleport(new THREE.Vector3(0, 0, 9), Math.PI);
+        if (me.rag) me.rag.teleport(new THREE.Vector3(0, g.island.heightAt(0, 9) + 0.03, 9), Math.PI);
       }
       if (me.rag) { me.rag.move.set(0, 0, -1).multiplyScalar(t < 37 ? 0.6 : 0); me.rag.speed = 3; me.rag.yaw = Math.PI; me.rag.aim.set(0, 0.2, -1); me.rag.arms = t > 37.5 ? 'reach' : 'idle'; }
       const p = me.pos(new THREE.Vector3());
       c.position.lerp(new THREE.Vector3(p.x + 2.2, p.y + 0.9, p.z + 3.2), 0.08);
       c.lookAt(p.x, p.y + 0.4, p.z - 1);
     } else {
+      const me = g.me;
+      const p = me.pos(new THREE.Vector3());
       const k = Math.min(1, (t - 40) / 6);
-      c.position.lerp(new THREE.Vector3(0, 7 + k * 6, 14 + k * 8), 0.03);
-      c.lookAt(0, 1.5, 0);
+      c.position.lerp(new THREE.Vector3(p.x + 3.4 + k * 2, p.y + 1.6 + k * 2.5, p.z + 6 + k * 5), 0.04);
+      c.lookAt(p.x - 0.4, p.y + 0.9 + k, p.z - 2);
+      if (me.rag) { me.rag.move.set(0, 0, 0); me.rag.arms = 'reach'; me.rag.aim.set(0, 0.9, -0.4); }
       this.titleEl.classList.add('on');
     }
   }
@@ -125,12 +130,15 @@ export class Story {
     this.t += dt;
     let li = -1;
     for (let i = 0; i < LINES.length; i++) if (this.t >= LINES[i][0]) li = i;
+    if (this.t > 39.5) li = -2;
     if (li !== this.li) {
+      const prev = this.li;
       this.li = li;
-      this.lineEl.classList.remove('on');
-      setTimeout(() => { if (li >= 0) { this.lineEl.textContent = LINES[li][1]; this.lineEl.classList.add('on'); } }, 350);
+      clearTimeout(this.lineTimer);
+      const show = () => { if (li >= 0) { this.lineText.textContent = LINES[li][1]; this.lineEl.classList.add('on'); } };
+      if (prev >= 0) { this.lineEl.classList.remove('on'); this.lineTimer = setTimeout(show, 280); } else show();
     }
-    if (this.t > 39.5) this.lineEl.classList.remove('on');
+    if (this.t > 40 && !this.musicOn) { this.musicOn = true; this.app.E.music.play(0); }
     const me = this.game.me;
     if (me && me.rag && this.t < 31) { me.rag.move.set(0, 0, 0); }
     if (this.t > END) this.finish();

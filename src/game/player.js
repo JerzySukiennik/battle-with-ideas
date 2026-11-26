@@ -17,6 +17,9 @@ export class LocalPlayer {
     this.team = info.team ?? 0;
     this.head = info.head || null;
     this.puppet = new Puppet(this.E.renderer.scene, this.color, { head: this.head });
+    this.outfit = null;
+    this.buffs = {};
+    if (info.outfit) this.wear(info.outfit);
     this.rag = null;
     this.scale = 1;
     this.hp = 100;
@@ -96,6 +99,13 @@ export class LocalPlayer {
 
   has(k) { return !!this.status[k]; }
 
+  wear(outfit, withBuffs = false) {
+    this.outfit = outfit && outfit.pieces ? outfit : null;
+    this.puppet.setOutfit(this.outfit);
+    this.buffs = {};
+    if (withBuffs && this.outfit) for (const b of this.outfit.buffs) this.buffs[b.type] = b.amt;
+  }
+
   addStatus(type, dur, amt = 1) {
     const cur = this.status[type];
     this.status[type] = { t: Math.max(cur ? cur.t : 0, dur), amt };
@@ -108,6 +118,7 @@ export class LocalPlayer {
     if (this.game.mode && this.game.mode.invulnerable && this.game.mode.invulnerable(this)) return;
     let dmg = h.dmg || 0;
     if (this.shieldUp > 0) dmg *= 0.25;
+    if (this.buffs.armor) dmg *= 1 - this.buffs.armor;
     if (this.painting > 0) return;
     if (this.shield > 0) { const a = Math.min(this.shield, dmg); this.shield -= a; dmg -= a; }
     if (dmg > 0) {
@@ -117,6 +128,7 @@ export class LocalPlayer {
     }
     if (h.by) this.lastHitBy = { id: h.by, t: performance.now() };
     const kb = h.kb ? _v2.set(h.kb[0], h.kb[1], h.kb[2]) : null;
+    if (kb && this.buffs.heavy) kb.multiplyScalar(1 - this.buffs.heavy);
     if (kb && this.vehicle && kb.length() > 9) this.game.vehicles.exit(this, true);
     if (kb && this.rag) {
       const L = kb.length();
@@ -130,8 +142,8 @@ export class LocalPlayer {
   applyEffect(fx) {
     const dur = fx.dur || 3, amt = fx.amt ?? 1;
     switch (fx.type) {
-      case 'burn': case 'poison': this.addStatus(fx.type, dur, amt || 4); break;
-      case 'freeze': this.addStatus('freeze', Math.min(dur, 3.5)); break;
+      case 'burn': case 'poison': if (fx.type === 'burn' && this.buffs.fireproof) break; this.addStatus(fx.type, dur, amt || 4); break;
+      case 'freeze': if (this.buffs.iceproof) break; this.addStatus('freeze', Math.min(dur, 3.5)); break;
       case 'stun': this.addStatus('stun', Math.min(dur, 2.5)); break;
       case 'launch': if (this.rag) { this.rag.impulse(new THREE.Vector3((Math.random() - 0.5) * 3, 14 + amt * 0.5, (Math.random() - 0.5) * 3)); this.rag.knock(1.5); } break;
       case 'shrink': this.addStatus('scale', dur, 0.5); break;
@@ -159,6 +171,7 @@ export class LocalPlayer {
   ko(by) {
     if (!this.alive) return;
     this.alive = false;
+    this.buffs = {};
     const killer = by || (this.lastHitBy && performance.now() - this.lastHitBy.t < 8000 ? this.lastHitBy.id : null);
     this.game.onLocalKO(killer);
   }
@@ -187,13 +200,19 @@ export class LocalPlayer {
     rag.move.copy(dir);
     let speed = 5.2 * (mv.sprint ? 1.38 : 1);
     if (st.speed) speed *= st.speed.amt;
+    const bf = this.buffs;
+    if (bf.speed) speed *= bf.speed;
     if (st.slow) speed *= st.slow.amt;
     if (st.freeze) speed = 0;
     rag.gravityMul = st.gravity ? st.gravity.amt : 1;
     rag.lowFriction = !!st.slippery;
     rag.bounce = false;
     this.applySurface(dt, rag);
+    if (bf.lowgrav) rag.gravityMul *= bf.lowgrav;
+    rag.jumpMul = bf.jump || 1;
     rag.speed = speed * (this.surfaceSpeed || 1);
+    if (bf.glide || bf.fly) this.updateWings(dt, input, rag, bf);
+    if (bf.regen && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + bf.regen * dt);
     if (input.hit('Space') || (input.typing && false)) rag.jumpReq = true;
     const aimDir = cam.forward(new THREE.Vector3());
     rag.aim.copy(aimDir);
@@ -213,6 +232,20 @@ export class LocalPlayer {
     if (dot > 0) { this.dotAcc = (this.dotAcc || 0) + dt; if (this.dotAcc > 0.5) { this.dotAcc = 0; this.onHit({ dmg: Math.min(12, dot) * 0.5 }); game.fx.burst(this.pos(_v), st.burn ? 'fire' : 'bubbles', 3); } }
   }
 
+  updateWings(dt, input, rag, bf) {
+    const vy = rag.bodies.pelvis.linvel().y;
+    if (bf.fly && !input.typing && input.down('Space') && !rag.jumpReq) {
+      const up = vy < 6 ? (18 * rag.gravityMul + 9 + 14 * bf.fly) * dt : 18 * rag.gravityMul * dt;
+      rag.impulse(_v.set(0, up, 0));
+      rag.air = Math.max(rag.air, 0.1);
+      this.flyFx = (this.flyFx || 0) + dt;
+      if (this.flyFx > 0.08) { this.flyFx = 0; this.game.fx.burst(rag.pos(_v).setY(rag.pos(_v).y - 0.6), 'smoke', 2); }
+    } else if (bf.glide && !rag.grounded && vy < -1.2) {
+      const cap = -1.2 - (1 - bf.glide) * 3;
+      if (vy < cap) rag.impulse(_v.set(0, (cap - vy) * 0.35, 0));
+    }
+  }
+
   applySurface(dt, rag) {
     this.surfaceSpeed = 1;
     const isl = this.game.island;
@@ -220,7 +253,7 @@ export class LocalPlayer {
     const s = isl.surface;
     this.surfaceTimer += dt;
     if (s === 'ice') rag.lowFriction = true;
-    else if (s === 'lava') { if (this.surfaceTimer > 0.4) { this.surfaceTimer = 0; this.onHit({ dmg: 3 }); this.game.fx.burst(this.pos(_v), 'embers', 4); } rag.bounce = true; }
+    else if (s === 'lava') { if (this.surfaceTimer > 0.4 && !this.buffs.fireproof) { this.surfaceTimer = 0; this.onHit({ dmg: 3 }); this.game.fx.burst(this.pos(_v), 'embers', 4); } rag.bounce = true; }
     else if (s === 'toxic') { if (this.surfaceTimer > 0.5) { this.surfaceTimer = 0; this.onHit({ dmg: 2 }); this.game.fx.burst(this.pos(_v), 'bubbles', 3); } }
     else if (s === 'bouncy') rag.bounce = true;
     else if (s === 'mud') this.surfaceSpeed = 0.55;
@@ -338,7 +371,7 @@ export class LocalPlayer {
     p.group.visible = true;
     p.mat.opacity = inv ? 0.25 : 1; p.mat.transparent = inv;
     const tint = this.status.freeze ? STATUS_TINT.freeze : null;
-    p.mat.color.set(tint || this.color);
+    p.mat.color.set(tint || p.bodyColor(this.color, !!(this.game.mode && this.game.mode.teams)));
     const speed = this.rag ? Math.hypot(this.rag.vel(_v).x, _v.z) : 0;
     p.tick(dt, speed);
     this.E.renderer.post.uniforms.dark.value += ((this.status.dark ? 1 : 0) - this.E.renderer.post.uniforms.dark.value) * Math.min(1, dt * 4);

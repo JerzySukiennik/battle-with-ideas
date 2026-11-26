@@ -9,11 +9,12 @@ import { Weapons } from './weapons.js';
 import { Vehicles } from './vehicles.js';
 import { LocalPlayer } from './player.js';
 import { RemotePlayer } from './remote.js';
-import { ideaCost, PAINT_COST } from '../shared/recipe.js';
+import { ideaCost, PAINT_COST, sanitizeOutfit } from '../shared/recipe.js';
 import { buildModel, animateModel } from '../engine/prims.js';
 
 const _v = new THREE.Vector3();
 const NPC = new Set(['nuda', 'dummy', 'spark']);
+const PERK = { armor: 'tougher', heavy: 'harder to push', speed: 'faster', jump: 'jumps higher', lowgrav: 'floaty', glide: 'glides', fly: 'hold Space to fly', regen: 'heals over time', fireproof: 'fireproof', iceproof: 'iceproof' };
 
 export class Game {
   constructor(E, api) {
@@ -85,6 +86,7 @@ export class Game {
     if (me.vehicle) to({ k: 'ride', id: me.id, v: me.vehicle.id, seat: me.seat || 0 });
     const head = me.puppet.headModel ? this.headRec : null;
     if (head) to({ k: 'head', rec: head });
+    if (me.outfit) to({ k: 'outfit', rec: me.outfit });
   }
 
   adoptNPC() {
@@ -240,6 +242,14 @@ export class Game {
       case 'paint': this.applyPaint(ev); break;
       case 'typing': { const p = this.players.get(ev.from); if (p && !mine) p.typing = ev.text || ''; break; }
       case 'head': { const p = this.players.get(ev.from); if (p && !mine && ev.rec) p.setHead(ev.rec); break; }
+      case 'outfit': {
+        const p = this.players.get(ev.from);
+        if (!p || mine) break;
+        const o = sanitizeOutfit(ev.rec);
+        if (JSON.stringify(o) !== JSON.stringify(p.outfit || null)) p.wear(o);
+        if (ev.show) { this.fx.burst(p.pos(_v), 'sparkle', 22, null, 1.4); this.E.audio.play('magic', p.pos(_v), 0.6); }
+        break;
+      }
       case 'spellshow': this.showSpell(ev); break;
       case 'chat': this.hud && this.hud.feed(ev.text, ev.color); break;
       default: this.deliverMode(ev, mine);
@@ -359,6 +369,12 @@ export class Game {
     const yaw = Math.atan2(this.cam.flatForward(_v).x, _v.z) + Math.PI;
     if (rec.kind === 'weapon') { this.emit({ k: 'unthink', id: tid }); if (me.ghost) return; this.weapons.equip(me, rec); this.E.audio.play(rec.sound, me.pos(_v), 0.7); return; }
     if (rec.kind === 'spell') { this.emit({ k: 'unthink', id: tid }); this.castSpell(rec, aimP); return; }
+    if (rec.kind === 'outfit') {
+      this.emit({ k: 'unthink', id: tid });
+      if (me.ghost) { this.hud && this.hud.toast('Ghosts cannot change clothes. Wait for the next round.', 'err'); return; }
+      this.wearOutfit(rec.outfit, rec.name, true);
+      return;
+    }
     if (rec.kind === 'projectile') {
       this.emit({ k: 'unthink', id: tid });
       const hand = me.ghost ? me.pos(new THREE.Vector3()) : me.handPos(new THREE.Vector3());
@@ -386,6 +402,18 @@ export class Game {
     }
     const ev = { k: 'spawn', id: tid, think: tid, owner: me.id, rec, at: at.toArray(), aim: aimP.toArray(), yaw: rec.kind === 'vehicle' ? yaw + Math.PI : yaw, seed: (Math.random() * 1e6) | 0, uses: uses - 1, ride: rec.kind === 'vehicle' };
     this.emit(ev);
+  }
+
+  wearOutfit(outfit, name, withBuffs = false) {
+    const me = this.me;
+    if (!me) return;
+    me.wear(outfit, withBuffs);
+    this.emit({ k: 'outfit', rec: me.outfit, show: true });
+    this.fx.burst(me.pos(_v), 'sparkle', 26, null, 1.5);
+    this.E.audio.play('magic', me.pos(_v), 0.7);
+    const perks = withBuffs && me.outfit ? me.outfit.buffs.map((b) => PERK[b.type]).filter(Boolean) : [];
+    if (this.hud && name) this.hud.toast(`You are wearing ${name}${perks.length ? ': ' + perks.join(', ') : ''}.`);
+    this.onWear && this.onWear(me.outfit, name);
   }
 
   castSpell(rec, aimP) {
@@ -563,7 +591,7 @@ export class Game {
 
   spawnMe(i = 0) {
     const sp = this.island.spawns[i % this.island.spawns.length];
-    const at = new THREE.Vector3(sp.x, 0.02, sp.z);
+    const at = new THREE.Vector3(sp.x, this.island.heightAt(sp.x, sp.z) + 0.03, sp.z);
     this.me.spawn(at, Math.atan2(-sp.x, -sp.z));
     this.cam.yaw = Math.atan2(sp.x, sp.z);
     this.cam.pitch = -0.2;

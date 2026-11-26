@@ -11,6 +11,7 @@ import { Music } from './engine/music.js';
 import { initMaterials } from './engine/prims.js';
 import { IdeaAPI } from './ai/api.js';
 import { Game } from './game/game.js';
+import { Island } from './game/world.js';
 import { HUD } from './ui/hud.js';
 import { App } from './ui/menu.js';
 import { rememberMine } from './ui/book.js';
@@ -36,7 +37,7 @@ async function boot() {
   E.music = new Music();
   say('opening the Idea Book');
   const api = new IdeaAPI();
-  await Promise.all([api.loadSeed(), E.audio.load(), E.music.init()]);
+  await Promise.all([api.loadSeed(), E.audio.load(), E.music.init(), Island.loadAssets()]);
   E.audio.preload();
   const game = new Game(E, api);
   game.onDiscover = rememberMine;

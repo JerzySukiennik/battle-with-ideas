@@ -5,7 +5,7 @@ import { buildModel, animateModel } from '../engine/prims.js';
 import { sanitizeIdea } from '../shared/recipe.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const KINDS = ['all', 'creature', 'vehicle', 'weapon', 'structure', 'disaster', 'projectile', 'spell', 'trap'];
+const KINDS = ['all', 'creature', 'vehicle', 'weapon', 'structure', 'disaster', 'projectile', 'spell', 'trap', 'outfit'];
 
 export function rememberMine(rec) {
   let list = [];

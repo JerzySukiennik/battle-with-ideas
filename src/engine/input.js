@@ -39,7 +39,10 @@ export class Input {
     document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === this.canvas; });
   }
 
-  lock() { try { const p = this.canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => this.canvas.requestPointerLock()); } catch (e) { this.canvas.requestPointerLock(); } }
+  lock() {
+    const plain = () => { try { const q = this.canvas.requestPointerLock(); if (q && q.catch) q.catch(() => {}); } catch (e) { } };
+    try { const p = this.canvas.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(plain); } catch (e) { plain(); }
+  }
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
 
   down(code) { return this.keys.has(code); }
