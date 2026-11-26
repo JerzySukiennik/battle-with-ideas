@@ -1,0 +1,15 @@
+name = "bwi-api"
+main = "src/index.mjs"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[vars]
+DAILY_USD = "5"
+FRESH_PER_IP = "150"
+CALLS_PER_IP = "1500"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bwi-book"
+database_id = "00000000-0000-0000-0000-000000000000"

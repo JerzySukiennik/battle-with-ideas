@@ -179,7 +179,7 @@ async function importSeed(req, env) {
   await init(env);
   const s = await req.json();
   let n = 0;
-  for (const mode of ['idea', 'paint', 'head']) {
+  for (const mode of ['idea', 'paint', 'head', 'outfit']) {
     const stmts = [];
     for (const r0 of s[mode] || []) {
       const rec = MODES[mode].clean(r0, r0.name);
