@@ -172,3 +172,10 @@ body.hud-comic .logo { color: #ffd23f; -webkit-text-stroke: 2.5px #111; text-sha
 .story .title { position: absolute; top: 30%; font-size: 104px; text-shadow: 0 3px 0 #fff, 0 0 40px rgba(255, 255, 255, .95), 0 0 80px rgba(255, 255, 255, .8); opacity: 0; transition: opacity 1s, transform 1.2s; transform: scale(.9); }
 .story .title.on { opacity: 1; transform: none; }
 @media (max-width: 900px) { .menu { grid-template-columns: 1fr; background: rgba(244, 242, 236, .9); } .h-left { width: 180px; } .h-help { display: none; } }
+
+.music { position: fixed; right: 16px; bottom: 16px; z-index: 30; display: grid; gap: 6px; justify-items: end; font-size: 14px; color: #55544f; transition: opacity .4s; }
+.music.off { opacity: 0; pointer-events: none; }
+.music .yt { width: 192px; height: 108px; border: var(--border); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); background: #000; }
+.music.file .yt { display: none; }
+.music span { padding: 2px 10px; background: var(--panel); border: var(--border); border-width: 1.5px; border-radius: 999px; }
+input[type=range] { accent-color: #25252b; width: 100%; }

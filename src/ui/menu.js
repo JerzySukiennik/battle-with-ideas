@@ -45,6 +45,9 @@ export class App {
     this.book = new BookScreen(this);
     E.input.onKey = (e) => this.onKey(e);
     document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('.btn')) { E.audio.resume(); E.audio.play('uiTap', null, 0.5); } });
+    const firstGesture = () => { if (this.game.mode && this.game.mode.kind === 'menu') E.music.play(); removeEventListener('pointerdown', firstGesture); removeEventListener('keydown', firstGesture); };
+    addEventListener('pointerdown', firstGesture);
+    addEventListener('keydown', firstGesture);
     document.addEventListener('pointerlockchange', () => {
       if (!document.pointerLockElement && this.inMatch() && !this.game.hud.mode && !this.pauseOpen && !this.noPause) this.pause(true);
     });
@@ -92,6 +95,8 @@ export class App {
     g.mode = mode;
     g.running = true;
     g.hud.root.classList.toggle('off', mode.kind === 'menu');
+    if (mode.kind === 'menu') { if (navigator.userActivation && navigator.userActivation.hasBeenActive) this.E.music.play(); }
+    else this.E.music.pause();
     mode.start();
     g.flushMode();
   }
@@ -196,7 +201,8 @@ export class App {
     el.innerHTML = `<div class="card panel"><h2 style="margin:0;font-weight:normal;font-size:34px">Paused</h2>${room}
       <button class="btn go" id="p-res">Resume</button>
       <div class="field"><label>Mouse sensitivity</label><input type="range" id="p-sens" min="0.3" max="2.5" step="0.05" value="${this.E.input.sens}"></div>
-      <div class="field"><label>Volume</label><input type="range" id="p-vol" min="0" max="1" step="0.05" value="${this.E.audio.volume}"></div>
+      <div class="field"><label>Sound effects</label><input type="range" id="p-vol" min="0" max="1" step="0.05" value="${this.E.audio.volume}"></div>
+      <div class="field"><label>Music (menu and victories)</label><input type="range" id="p-mus" min="0" max="1" step="0.05" value="${this.E.music.vol}"></div>
       <div class="styles">${['paper', 'clean', 'comic'].map((s) => `<button class="btn slim ${p.style === s ? 'sel' : ''}" data-s="${s}">${s}</button>`).join('')}</div>
       <button class="btn" id="p-book">Idea Book</button>
       <button class="btn" id="p-leave">Leave to menu</button></div>`;
@@ -205,6 +211,7 @@ export class App {
     el.querySelector('#p-res').onclick = () => this.pause(false);
     el.querySelector('#p-sens').oninput = (e) => { this.E.input.sens = +e.target.value; localStorage.setItem('bwi.sens', e.target.value); };
     el.querySelector('#p-vol').oninput = (e) => this.E.audio.setVolume(+e.target.value);
+    el.querySelector('#p-mus').oninput = (e) => this.E.music.setVolume(+e.target.value);
     el.querySelectorAll('[data-s]').forEach((b) => b.onclick = () => { p.style = b.dataset.s; this.saveProfile(); document.body.className = 'hud-' + p.style; el.querySelectorAll('[data-s]').forEach((x) => x.classList.toggle('sel', x === b)); });
     el.querySelector('#p-book').onclick = () => this.book.show();
     el.querySelector('#p-leave').onclick = () => { this.pause(false); this.E.input.unlock(); this.toMenu(); };

@@ -147,6 +147,7 @@ export class Coop {
         g.island.paint(VICTORY, new THREE.Vector3(0, 0, 0), 99, 5);
         g.fx.burst(new THREE.Vector3(0, 4, 0), 'confetti', 160, null, 4);
         g.E.audio.play('fanfare', null, 1);
+        g.E.music.play(0);
       }
       return;
     }

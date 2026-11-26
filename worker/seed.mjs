@@ -10,6 +10,9 @@ import { IDEA_SYSTEM, PAINT_SYSTEM, HEAD_SYSTEM, SEED_LIST_SYSTEM } from './src/
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(here, '..', 'data', 'seed.json');
+const PART = path.join(here, '..', 'Niepotrzebne', 'seed-partial.json');
+const partial = fs.existsSync(PART) ? JSON.parse(fs.readFileSync(PART, 'utf8')) : { phrases: null, done: {} };
+const savePart = () => fs.writeFileSync(PART, JSON.stringify(partial));
 const MODEL = 'claude-haiku-5-5';
 const WANT = parseInt(process.argv[2] || '500', 10);
 const KEYS = (process.env.ANTHROPIC_API_KEYS || process.env.ANTHROPIC_API_KEY || '').split(',').filter(Boolean);
@@ -28,8 +31,10 @@ const CATEGORIES = [
 async function call(system, user, schema, max = 3500, tries = 3) {
   for (let t = 0; t < tries; t++) {
     const client = clients[(calls + t) % clients.length];
+    const t0 = Date.now();
     try {
       calls++;
+      if (process.env.SEED_DEBUG) console.log('start', user.slice(0, 40));
       const res = await client.messages.create({
         model: MODEL, max_tokens: max,
         system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
@@ -37,11 +42,13 @@ async function call(system, user, schema, max = 3500, tries = 3) {
         thinking: { type: 'disabled' },
         output_config: { effort: 'low', format: { type: 'json_schema', schema } },
       });
+      if (process.env.SEED_DEBUG) console.log('end', ((Date.now() - t0) / 1000).toFixed(1), res.stop_reason, user.slice(0, 40));
       const u = res.usage || {};
       usd += ((u.input_tokens || 0) * 0.10 + (u.output_tokens || 0) * 0.50 + (u.cache_read_input_tokens || 0) * 0.01 + (u.cache_creation_input_tokens || 0) * 0.125) / 1e6;
       if (res.stop_reason === 'refusal' || res.stop_reason === 'max_tokens') continue;
       return JSON.parse(res.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
     } catch (e) {
+      if (process.env.SEED_DEBUG) console.log('err', ((Date.now() - t0) / 1000).toFixed(1), e.status, String(e.message).slice(0, 100));
       if (e instanceof Anthropic.RateLimitError) { await new Promise((r) => setTimeout(r, 4000 * (t + 1))); continue; }
       if (e instanceof Anthropic.APIError && e.status >= 500) { await new Promise((r) => setTimeout(r, 2000)); continue; }
       if (e instanceof SyntaxError) continue;
@@ -67,19 +74,31 @@ async function pool(items, n, fn) {
 
 const LIST_SCHEMA = { type: 'object', additionalProperties: false, required: ['ideas'], properties: { ideas: { type: 'array', items: { type: 'string' } } } };
 
-console.log(`Brainstorm: ${CATEGORIES.length} agents...`);
-const per = Math.ceil((WANT * 1.15) / CATEGORIES.length);
-const lists = await pool(CATEGORIES, CATEGORIES.length, (cat) => call(SEED_LIST_SYSTEM, `Category: ${cat}. Give ${per} entries.`, LIST_SCHEMA, 4000));
-const seen = new Set();
-const phrases = [];
-for (const l of lists) for (const t of (l && l.ideas) || []) { const n = normText(t); if (n && !seen.has(n) && t.length <= 40) { seen.add(n); phrases.push(t.trim()); } }
-for (const must of ['rekin', 'shark', 'tornado z rekinami', 'latający samochód', 'flying car', 'smok', 'dragon', 'banan', 'czarna dziura', 'meteor', 'kot z laserami', 'pierogi', 'maluch', 'ściana', 'trampolina', 'miecz', 'patelnia', 'tornado', 'wulkan', 'pszczoły']) if (!seen.has(normText(must))) { seen.add(normText(must)); phrases.unshift(must); }
-const pick = phrases.slice(0, WANT);
-console.log(`${phrases.length} unique ideas brainstormed, sculpting ${pick.length} with 10 parallel agents...`);
-
-const recs = await pool(pick, 10, async (t) => {
+let pick;
+if (partial.phrases) {
+  pick = partial.phrases;
+  console.log(`Resuming: ${Object.keys(partial.done).length}/${pick.length} already sculpted`);
+} else {
+  console.log(`Brainstorm: ${CATEGORIES.length} agents...`);
+  const per = Math.ceil((WANT * 1.15) / CATEGORIES.length);
+  const lists = await pool(CATEGORIES, CATEGORIES.length, (cat) => call(SEED_LIST_SYSTEM, `Category: ${cat}. Give ${per} entries.`, LIST_SCHEMA, 4000));
+  const seen = new Set();
+  const phrases = [];
+  for (const l of lists) for (const t of (l && l.ideas) || []) { const n = normText(t); if (n && !seen.has(n) && t.length <= 40) { seen.add(n); phrases.push(t.trim()); } }
+  for (const must of ['rekin', 'shark', 'tornado z rekinami', 'latający samochód', 'flying car', 'smok', 'dragon', 'banan', 'czarna dziura', 'meteor', 'kot z laserami', 'pierogi', 'maluch', 'ściana', 'trampolina', 'miecz', 'patelnia', 'tornado', 'wulkan', 'pszczoły']) if (!seen.has(normText(must))) { seen.add(normText(must)); phrases.unshift(must); }
+  pick = phrases.slice(0, WANT);
+  partial.phrases = pick;
+  savePart();
+  console.log(`${phrases.length} unique ideas brainstormed, sculpting ${pick.length} with 10 parallel agents...`);
+}
+const recs = await pool(pick, 30, async (t) => {
+  if (partial.done[t]) return { text: t, rec: partial.done[t] };
   const raw = await call(IDEA_SYSTEM, `The player typed: ${JSON.stringify(t)}`, IDEA_SCHEMA);
-  return raw ? { text: t, rec: sanitizeIdea(raw, t) } : null;
+  if (!raw) return null;
+  const rec = sanitizeIdea(raw, t);
+  partial.done[t] = rec;
+  savePart();
+  return { text: t, rec };
 });
 const byKey = new Map();
 for (const r of recs) {

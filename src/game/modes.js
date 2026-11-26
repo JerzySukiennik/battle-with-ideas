@@ -130,6 +130,7 @@ export class Battle {
         return;
       }
       if (ev.st === 'count') {
+        g.E.music.pause();
         this.seed = ev.seed;
         g.resetArena(ev.seed);
         this.order = ev.ids;
@@ -154,6 +155,7 @@ export class Battle {
         g.hud.banner(`${name} wins the Tournament!`, 'Their imagination rebuilt the world. New match in a few seconds.');
         g.fx.burst(g.cam.cam.position.clone().add(g.cam.forward(new THREE.Vector3()).multiplyScalar(6)), 'confetti', 120, null, 3);
         g.E.audio.play('fanfare', null, 1);
+        g.E.music.play(0);
         this.endAt = this.now() + 9000;
         this.matchOver = true;
       }
