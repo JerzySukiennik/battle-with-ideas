@@ -1,0 +1,115 @@
+{
+  "index": {
+    ".read": "auth != null",
+    ".indexOn": [
+      "u"
+    ],
+    "$code": {
+      ".write": "auth != null && $code.matches(/^[A-Z]{4}$/)",
+      ".validate": "newData.hasChildren(['n', 'c', 'u'])",
+      "n": {
+        ".validate": "newData.isString() && newData.val().length <= 20"
+      },
+      "c": {
+        ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 8"
+      },
+      "m": {
+        ".validate": "newData.isString() && newData.val().length <= 8"
+      },
+      "s": {
+        ".validate": "newData.isString() && newData.val().length <= 8"
+      },
+      "pv": {
+        ".validate": "newData.isBoolean()"
+      },
+      "u": {
+        ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+      },
+      "$other": {
+        ".validate": false
+      }
+    }
+  },
+  "rooms": {
+    "$code": {
+      ".read": "auth != null",
+      ".validate": "$code.matches(/^[A-Z]{4}$/)",
+      ".write": "auth != null && !newData.exists() && !data.child('players').exists()",
+      "meta": {
+        ".write": "auth != null && (!data.exists() || data.child('host').val() === auth.uid || !data.child('host').exists() || !data.parent().child('players').child(data.child('host').val()).exists())",
+        "host": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "mode": {
+          ".validate": "newData.isString() && newData.val().matches(/^(ffa|teams|coop)$/)"
+        },
+        "st": {
+          ".validate": "newData.isString() && newData.val().matches(/^(lobby|play)$/)"
+        },
+        "priv": {
+          ".validate": "newData.isBoolean()"
+        },
+        "c": {
+          ".validate": "newData.isNumber()"
+        },
+        "at": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      },
+      "players": {
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['n', 'j'])",
+          "n": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 16"
+          },
+          "c": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 16"
+          },
+          "t": {
+            ".write": "auth != null && data.parent().parent().parent().child('meta').child('host').val() === auth.uid",
+            ".validate": "newData.isNumber() && (newData.val() === 0 || newData.val() === 1)"
+          },
+          "h": {
+            ".validate": "newData.isString() && newData.val().length <= 6000"
+          },
+          "j": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "sig": {
+        "$to": {
+          ".write": "auth != null && auth.uid === $to",
+          "$from": {
+            ".write": "auth != null && auth.uid === $from",
+            "$msg": {
+              ".validate": "newData.hasChildren(['k', 'd']) && newData.child('k').isString() && newData.child('k').val().length <= 8 && newData.child('d').isString() && newData.child('d').val().length <= 9000"
+            }
+          }
+        }
+      },
+      "relay": {
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['s']) && newData.child('s').isString() && newData.child('s').val().length <= 30000"
+        }
+      },
+      "rev": {
+        "$to": {
+          ".write": "auth != null && auth.uid === $to",
+          "$msg": {
+            ".write": "auth != null && !data.exists() && newData.child('f').val() === auth.uid",
+            ".validate": "newData.hasChildren(['f', 'd']) && newData.child('d').isString() && newData.child('d').val().length <= 20000"
+          }
+        }
+      }
+    }
+  }
+}

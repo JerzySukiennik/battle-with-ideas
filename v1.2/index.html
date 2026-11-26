@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- Battle with Ideas: type an idea, it becomes real, use it to win. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Battle with Ideas</title>
+<meta name="description" content="Type any idea and it appears in the arena. A shark, a flying car, a sharknado. Battle your friends with pure imagination.">
+<meta name="theme-color" content="#f4f2ec">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='26' r='18' fill='%23ffd23f' stroke='%23222' stroke-width='4'/%3E%3Crect x='24' y='44' width='16' height='10' rx='3' fill='%23fff' stroke='%23222' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Bangers&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/ui/ui.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+    "rapier": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.19.3/rapier.mjs"
+  }
+}
+</script>
+</head>
+<body class="hud-paper">
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="ui"></div>
+<div id="boot"><div class="boot-in"><div class="boot-bulb"></div><div class="boot-t">Battle with Ideas</div><div class="boot-s" id="boot-s">sharpening pencils</div><div class="boot-err" id="boot-err"></div></div></div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

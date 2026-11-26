@@ -1,0 +1,216 @@
+{
+ "sounds": {
+  "bark": [
+   "bark_1.mp3",
+   "bark_2.mp3",
+   "bark_3.mp3"
+  ],
+  "boing": [
+   "boing_1.mp3",
+   "boing_2.mp3"
+  ],
+  "bonk": [
+   "bonk_1.mp3",
+   "bonk_2.mp3",
+   "bonk_3.mp3",
+   "bonk_4.mp3"
+  ],
+  "bossHorn": [
+   "bossHorn.mp3"
+  ],
+  "chirp": [
+   "chirp_1.mp3",
+   "chirp_2.mp3"
+  ],
+  "crunch": [
+   "crunch_1.mp3",
+   "crunch_2.mp3"
+  ],
+  "discover": [
+   "discover.mp3"
+  ],
+  "explosion": [
+   "explosion_1.mp3",
+   "explosion_2.mp3",
+   "explosion_3.mp3"
+  ],
+  "fanfare": [
+   "fanfare.mp3"
+  ],
+  "growl": [
+   "growl_1.mp3",
+   "growl_2.mp3"
+  ],
+  "gunshot": [
+   "gunshot_1.mp3",
+   "gunshot_2.mp3",
+   "gunshot_3.mp3"
+  ],
+  "hiss": [
+   "hiss.mp3"
+  ],
+  "horn": [
+   "horn.mp3"
+  ],
+  "laser": [
+   "laser_1.mp3",
+   "laser_2.mp3",
+   "laser_3.mp3"
+  ],
+  "magic": [
+   "magic_1.mp3",
+   "magic_2.mp3"
+  ],
+  "meow": [
+   "meow_1.mp3",
+   "meow_2.mp3"
+  ],
+  "moo": [
+   "moo.mp3"
+  ],
+  "neigh": [
+   "neigh.mp3"
+  ],
+  "oink": [
+   "oink_1.mp3",
+   "oink_2.mp3"
+  ],
+  "paper": [
+   "paper_1.mp3",
+   "paper_2.mp3"
+  ],
+  "pencil": [
+   "pencil_1.mp3",
+   "pencil_2.mp3",
+   "pencil_3.mp3",
+   "pencil_4.mp3"
+  ],
+  "pop": [
+   "pop_1.mp3",
+   "pop_2.mp3",
+   "pop_3.mp3"
+  ],
+  "quack": [
+   "quack_1.mp3",
+   "quack_2.mp3"
+  ],
+  "roar": [
+   "roar_1.mp3",
+   "roar_2.mp3"
+  ],
+  "shoot": [
+   "shoot_1.mp3",
+   "shoot_2.mp3",
+   "shoot_3.mp3"
+  ],
+  "slurp": [
+   "slurp.mp3"
+  ],
+  "splash": [
+   "splash_1.mp3",
+   "splash_2.mp3"
+  ],
+  "squeak": [
+   "squeak_1.mp3",
+   "squeak_2.mp3"
+  ],
+  "stamp": [
+   "stamp_1.mp3",
+   "stamp_2.mp3"
+  ],
+  "sword": [
+   "sword_1.mp3",
+   "sword_2.mp3",
+   "sword_3.mp3"
+  ],
+  "thunder": [
+   "thunder.mp3"
+  ],
+  "uiOpen": [
+   "uiOpen.mp3"
+  ],
+  "uiTap": [
+   "uiTap.mp3"
+  ],
+  "whistle": [
+   "whistle.mp3"
+  ],
+  "whoosh": [
+   "whoosh_1.mp3",
+   "whoosh_2.mp3",
+   "whoosh_3.mp3",
+   "whoosh_4.mp3"
+  ],
+  "yawn": [
+   "yawn.mp3"
+  ],
+  "zap": [
+   "zap_1.mp3",
+   "zap_2.mp3"
+  ],
+  "bell": [
+   "bell.mp3"
+  ],
+  "chomp": [
+   "chomp.mp3"
+  ],
+  "crash": [
+   "crash_1.mp3",
+   "crash_2.mp3"
+  ],
+  "ghost": [
+   "ghost.mp3"
+  ],
+  "grab": [
+   "grab_1.mp3",
+   "grab_2.mp3"
+  ],
+  "tap": [
+   "tap_1.mp3",
+   "tap_2.mp3",
+   "tap_3.mp3",
+   "tap_4.mp3"
+  ],
+  "buzz": [
+   "buzz.flac"
+  ],
+  "engine": [
+   "engine.flac"
+  ],
+  "helicopter": [
+   "helicopter.flac"
+  ],
+  "jet": [
+   "jet.flac"
+  ],
+  "rumble": [
+   "rumble.flac"
+  ],
+  "sizzle": [
+   "sizzle.flac"
+  ],
+  "wind": [
+   "wind.flac"
+  ]
+ },
+ "alias": {
+  "fart": "squeak"
+ },
+ "loops": {
+  "engine": {
+   "from": 1.25
+  },
+  "jet": {
+   "from": 1.6,
+   "to": 4.5
+  },
+  "buzz": {
+   "from": 0.2,
+   "to": 2.8
+  },
+  "helicopter": {
+   "from": 0.3,
+   "to": 2.9
+  }
+ }
+}

@@ -12,4 +12,4 @@ CALLS_PER_IP = "1500"
 [[d1_databases]]
 binding = "DB"
 database_name = "bwi-book"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "aab4f03f-8332-41e0-b167-e8da9e67b743"
