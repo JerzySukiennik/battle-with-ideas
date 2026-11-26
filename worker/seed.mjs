@@ -17,7 +17,7 @@ const MODEL = 'claude-haiku-5-5';
 const WANT = parseInt(process.argv[2] || '500', 10);
 const KEYS = (process.env.ANTHROPIC_API_KEYS || process.env.ANTHROPIC_API_KEY || '').split(',').filter(Boolean);
 if (!KEYS.length) { console.error('No ANTHROPIC key in env. Use: keys run anthropic -- node worker/seed.mjs'); process.exit(1); }
-const clients = KEYS.map((k) => new Anthropic({ apiKey: k, maxRetries: 3, timeout: 60000 }));
+const clients = KEYS.map((k) => new Anthropic({ apiKey: k, maxRetries: 2, timeout: 60000 }));
 let usd = 0, calls = 0;
 
 const CATEGORIES = [
@@ -91,7 +91,7 @@ if (partial.phrases) {
   savePart();
   console.log(`${phrases.length} unique ideas brainstormed, sculpting ${pick.length} with 10 parallel agents...`);
 }
-const recs = await pool(pick, 30, async (t) => {
+const recs = await pool(pick, 8, async (t) => {
   if (partial.done[t]) return { text: t, rec: partial.done[t] };
   const raw = await call(IDEA_SYSTEM, `The player typed: ${JSON.stringify(t)}`, IDEA_SCHEMA);
   if (!raw) return null;
